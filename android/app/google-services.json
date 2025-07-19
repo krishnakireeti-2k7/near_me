@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "527112916114",
+    "project_id": "nearme-ebdb8",
+    "storage_bucket": "nearme-ebdb8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:527112916114:android:c9a2848583367d3ac42a4b",
+        "android_client_info": {
+          "package_name": "com.example.near_me"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2Vs1V69UL9ZNQDrE1sg9k4DC-YCdkkYw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
