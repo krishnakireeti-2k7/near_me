@@ -39,17 +39,14 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
   Future<void> _submitProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
-    print("Form is valid. Submitting...");
-
     setState(() => isLoading = true);
 
     final user = ref.watch(authStateProvider).value;
     if (user == null) {
-      print("User is null. Aborting.");
+      setState(() => isLoading = false);
+      showFloatingSnackBar(context, "User not authenticated.");
       return;
     }
-
-    print("User UID: ${user.uid}");
 
     final profileRepo = ref.read(profileRepositoryProvider);
 
@@ -71,27 +68,26 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
       },
     );
 
-    print("Profile object created. Saving to Firestore...");
     try {
       await profileRepo.createOrUpdateProfile(profile);
-      print("Profile saved successfully.");
       setState(() => isLoading = false);
-      // Show snackbar
       showFloatingSnackBar(context, "Profile saved!");
     } catch (e) {
-      print("Error saving profile: $e");
       setState(() => isLoading = false);
       showFloatingSnackBar(context, "Failed to save profile.");
     }
   }
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
     String? hint,
     bool requiredField = false,
+    bool isSocial = false,
+    IconData? prefixIcon,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: TextFormField(
         controller: controller,
         validator:
@@ -101,15 +97,33 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
+          prefixIcon:
+              isSocial
+                  ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Icon(prefixIcon, color: Colors.grey[600]),
+                  )
+                  : null,
           filled: true,
-          fillColor: Colors.grey[100],
+          fillColor: Colors.grey[50],
           contentPadding: const EdgeInsets.symmetric(
             vertical: 16,
             horizontal: 20,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: Theme.of(context).primaryColor,
+              width: 2,
+            ),
           ),
         ),
       ),
@@ -118,78 +132,109 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Create Profile'),
-        elevation: 0,
+        toolbarHeight: 80,
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        elevation: 0,
+        title: Text(
+          'Create Your Profile',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: false,
       ),
-      body:
-          isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      _buildTextField(
-                        controller: nameController,
-                        label: 'Name',
-                        requiredField: true,
-                      ),
-                      _buildTextField(
-                        controller: yearController,
-                        label: 'College Year',
-                        hint: 'e.g. 1st, 2nd',
-                      ),
-                      _buildTextField(
-                        controller: branchController,
-                        label: 'Branch / Department',
-                      ),
-                      _buildTextField(
-                        controller: interestsController,
-                        label: 'Interests',
-                        hint: 'e.g. Flutter, Web Dev (comma separated)',
-                      ),
-                      const SizedBox(height: 12),
-                      _buildTextField(
-                        controller: instagramController,
-                        label: 'Instagram (optional)',
-                        hint: '@yourhandle',
-                      ),
-                      _buildTextField(
-                        controller: twitterController,
-                        label: 'Twitter (optional)',
-                        hint: '@yourhandle',
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            backgroundColor: Colors.black,
+      body: SafeArea(
+        child:
+            isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Tell us about yourself to connect with others.",
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildTextField(
+                          controller: nameController,
+                          label: 'Name',
+                          requiredField: true,
+                        ),
+                        _buildTextField(
+                          controller: yearController,
+                          label: 'College Year',
+                          hint: 'e.g. 1st, 2nd',
+                        ),
+                        _buildTextField(
+                          controller: branchController,
+                          label: 'Branch / Department',
+                        ),
+                        _buildTextField(
+                          controller: interestsController,
+                          label: 'Interests',
+                          hint: 'e.g. Flutter, Web Dev (comma separated)',
+                        ),
+                        const SizedBox(height: 12),
+                        const Divider(height: 32),
+                        Text(
+                          'Social Links (Optional)',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
-                          onPressed: _submitProfile,
-                          child: const Text(
-                            'Save & Continue',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildTextField(
+                          controller: instagramController,
+                          label: 'Instagram',
+                          hint: '@yourhandle',
+                          isSocial: true,
+                          prefixIcon: Icons.alternate_email,
+                        ),
+                        _buildTextField(
+                          controller: twitterController,
+                          label: 'Twitter',
+                          hint: '@yourhandle',
+                          isSocial: true,
+                          prefixIcon: Icons.alternate_email,
+                        ),
+                        const SizedBox(height: 32),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              backgroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: _submitProfile,
+                            child: const Text(
+                              'Save & Continue',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 24),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+      ),
     );
   }
 }
