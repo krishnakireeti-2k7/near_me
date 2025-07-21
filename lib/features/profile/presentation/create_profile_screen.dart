@@ -5,6 +5,7 @@ import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
+import 'package:near_me/widgets/custom_text_field.dart';
 import 'package:geolocator/geolocator.dart';
 
 class CreateProfileScreen extends ConsumerStatefulWidget {
@@ -113,58 +114,6 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
     }
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    String? hint,
-    bool requiredField = false,
-    bool isSocial = false,
-    IconData? prefixIcon,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TextFormField(
-        controller: controller,
-        validator:
-            requiredField
-                ? (val) => val == null || val.isEmpty ? 'Required' : null
-                : null,
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          prefixIcon:
-              isSocial
-                  ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Icon(prefixIcon, color: Colors.grey[600]),
-                  )
-                  : null,
-          filled: true,
-          fillColor: Colors.grey[50],
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 16,
-            horizontal: 20,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(
-              color: Theme.of(context).primaryColor,
-              width: 2,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -199,26 +148,26 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
                           style: TextStyle(fontSize: 16, color: Colors.grey),
                         ),
                         const SizedBox(height: 24),
-                        _buildTextField(
+                        CustomTextField(
                           controller: nameController,
                           label: 'Name',
                           requiredField: true,
                         ),
-                        _buildTextField(
+                        CustomTextField(
                           controller: yearController,
                           label: 'College Year',
                           hint: 'e.g. 1st, 2nd',
                         ),
-                        _buildTextField(
+                        CustomTextField(
                           controller: branchController,
                           label: 'Branch / Department',
                         ),
-                        _buildTextField(
+                        CustomTextField(
                           controller: bioController,
                           label: 'Short Bio',
                           hint: 'e.g. I love coding and startups!',
                         ),
-                        _buildTextField(
+                        CustomTextField(
                           controller: interestsController,
                           label: 'Interests',
                           hint: 'e.g. Flutter, Web Dev (comma separated)',
@@ -232,14 +181,14 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        _buildTextField(
+                        CustomTextField(
                           controller: instagramController,
                           label: 'Instagram',
                           hint: '@yourhandle',
                           isSocial: true,
                           prefixIcon: Icons.alternate_email,
                         ),
-                        _buildTextField(
+                        CustomTextField(
                           controller: twitterController,
                           label: 'Twitter',
                           hint: '@yourhandle',
