@@ -1,9 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
+import 'package:geolocator/geolocator.dart';
 
 class CreateProfileScreen extends ConsumerStatefulWidget {
   const CreateProfileScreen({super.key});
@@ -22,8 +24,37 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
   final interestsController = TextEditingController();
   final instagramController = TextEditingController();
   final twitterController = TextEditingController();
+  final bioController = TextEditingController(); 
 
   bool isLoading = false;
+  double? _userLatitude;
+  double? _userLongitude;
+
+  @override
+  void initState() {
+    super.initState();
+    _getUserLocation();
+  }
+
+  Future<void> _getUserLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) {
+        return;
+      }
+    }
+
+    final position = await Geolocator.getCurrentPosition();
+    setState(() {
+      _userLatitude = position.latitude;
+      _userLongitude = position.longitude;
+    });
+  }
 
   @override
   void dispose() {
@@ -33,6 +64,7 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
     interestsController.dispose();
     instagramController.dispose();
     twitterController.dispose();
+    bioController.dispose(); 
     super.dispose();
   }
 
@@ -47,7 +79,6 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
       showFloatingSnackBar(context, "User not authenticated.");
       return;
     }
-
     final profileRepo = ref.read(profileRepositoryProvider);
 
     final profile = UserProfileModel(
@@ -57,15 +88,19 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
       branch: branchController.text.trim(),
       interests:
           interestsController.text
-              .trim()
               .split(',')
               .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
               .toList(),
       profileImageUrl: user.photoURL ?? '',
       socialHandles: {
         'instagram': instagramController.text.trim(),
         'twitter': twitterController.text.trim(),
       },
+      location:
+          (_userLatitude != null && _userLongitude != null)
+              ? GeoPoint(_userLatitude!, _userLongitude!)
+              : null,
     );
 
     try {
@@ -177,6 +212,11 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
                         _buildTextField(
                           controller: branchController,
                           label: 'Branch / Department',
+                        ),
+                        _buildTextField(
+                          controller: bioController,
+                          label: 'Short Bio',
+                          hint: 'e.g. I love coding and startups!',
                         ),
                         _buildTextField(
                           controller: interestsController,

@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class UserProfileModel {
   final String uid;
   final String name;
@@ -5,9 +7,8 @@ class UserProfileModel {
   final String branch;
   final List<String> interests;
   final String profileImageUrl;
-  final Map<String, String>? socialHandles;
-  final double? latitude;
-  final double? longitude;
+  final Map<String, String> socialHandles;
+  final GeoPoint? location;
 
   UserProfileModel({
     required this.uid,
@@ -16,9 +17,8 @@ class UserProfileModel {
     required this.branch,
     required this.interests,
     required this.profileImageUrl,
-    this.socialHandles,
-    this.latitude,
-    this.longitude,
+    required this.socialHandles,
+    this.location,
   });
 
   Map<String, dynamic> toMap() {
@@ -30,22 +30,24 @@ class UserProfileModel {
       'interests': interests,
       'profileImageUrl': profileImageUrl,
       'socialHandles': socialHandles,
-      'latitude': latitude,
-      'longitude': longitude,
+      'location': location,
     };
   }
 
   factory UserProfileModel.fromMap(Map<String, dynamic> map) {
     return UserProfileModel(
-      uid: map['uid'] ?? '',
-      name: map['name'] ?? '',
-      collegeYear: map['collegeYear'] ?? '',
-      branch: map['branch'] ?? '',
-      interests: List<String>.from(map['interests'] ?? []),
-      profileImageUrl: map['profileImageUrl'] ?? '',
-      socialHandles: Map<String, String>.from(map['socialHandles'] ?? {}),
-      latitude: map['latitude'],
-      longitude: map['longitude'],
+      uid: map['uid'],
+      name: map['name'],
+      collegeYear: map['collegeYear'],
+      branch: map['branch'],
+      interests:
+          map['interests'] != null ? List<String>.from(map['interests']) : [],
+      profileImageUrl: map['profileImageUrl'],
+      socialHandles:
+          map['socialHandles'] != null
+              ? Map<String, String>.from(map['socialHandles'])
+              : {},
+      location: map['location'] != null ? map['location'] as GeoPoint : null,
     );
   }
 }
