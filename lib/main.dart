@@ -6,7 +6,9 @@ import '../firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const ProviderScope(child: NearMeApp()));
 }
 
@@ -17,7 +19,8 @@ class NearMeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'NearMe',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      //theme: ThemeData(
+      //),
       home: const AuthView(),
     );
   }
