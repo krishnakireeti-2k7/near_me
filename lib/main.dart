@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:near_me/features/profile/presentation/auth_wrapper.dart';
-import 'features/auth/auth_view.dart';
+import 'package:near_me/app/router.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 void main() async {
@@ -10,30 +9,15 @@ void main() async {
   runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    return MaterialApp.router(
       title: 'NearMe',
       debugShowCheckedModeBanner: false,
-      home: const AuthWrapper(), 
-    );
-  }
-}
-
-
-class NearMeApp extends StatelessWidget {
-  const NearMeApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'NearMe',
-      //theme: ThemeData(
-      //),
-      home: const AuthView(),
+      routerConfig: router,
     );
   }
 }

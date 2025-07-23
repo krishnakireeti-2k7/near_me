@@ -1,9 +1,8 @@
-// main.dart or features/auth/presentation/auth_wrapper.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:near_me/features/auth/auth_view.dart';
-import 'package:near_me/features/profile/presentation/create_profile_screen.dart'; // Replace with your screen
+import 'package:go_router/go_router.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
+import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
 class AuthWrapper extends ConsumerWidget {
   const AuthWrapper({super.key});
@@ -14,14 +13,38 @@ class AuthWrapper extends ConsumerWidget {
 
     return authState.when(
       data: (user) {
-        if (user != null) {
-          return const CreateProfileScreen(); // User is signed in
+        if (user == null) {
+          Future.microtask(() => context.go('/login'));
         } else {
-          return const AuthView(); // User not signed in
+          final userProfile = ref.watch(userProfileProvider(user.uid));
+          return userProfile.when(
+            data: (profile) {
+              if (profile == null) {
+                Future.microtask(() => context.go('/create-profile'));
+              } else {
+                Future.microtask(() => context.go('/map'));
+              }
+
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            },
+            loading:
+                () => const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                ),
+            error:
+                (e, _) =>
+                    Scaffold(body: Center(child: Text('Profile error: $e'))),
+          );
         }
+
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text('Error: $error')),
+      loading:
+          () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(body: Center(child: Text('Auth error: $e'))),
     );
   }
 }

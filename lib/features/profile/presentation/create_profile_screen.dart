@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
@@ -108,11 +109,14 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
       await profileRepo.createOrUpdateProfile(profile);
       setState(() => isLoading = false);
       showFloatingSnackBar(context, "Profile saved!");
+
+      GoRouter.of(context).go('/map');
     } catch (e) {
       setState(() => isLoading = false);
       showFloatingSnackBar(context, "Failed to save profile.");
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

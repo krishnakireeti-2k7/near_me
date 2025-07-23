@@ -50,4 +50,17 @@ class UserProfileModel {
       location: map['location'] != null ? map['location'] as GeoPoint : null,
     );
   }
+
+  factory UserProfileModel.empty() {
+    return UserProfileModel(
+      uid: '',
+      name: '',
+      collegeYear: '',
+      branch: '',
+      interests: [],
+      profileImageUrl: '',
+      socialHandles: {},
+      location: null,
+    );
+  }
 }
