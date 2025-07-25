@@ -11,7 +11,7 @@ final router = GoRouter(
     GoRoute(
       path: '/login',
       builder:
-          (context, state) => const AuthView(), // 👈 your actual login screen
+          (context, state) => const AuthView(), 
     ),
     GoRoute(
       path: '/create-profile',
