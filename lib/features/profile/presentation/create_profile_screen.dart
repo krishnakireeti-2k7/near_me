@@ -8,7 +8,6 @@ import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
-import 'package:near_me/widgets/custom_text_field.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 

@@ -1,10 +1,24 @@
+Got it, Kireeti. Here’s what I’ll do:
+
+### ✅ Requested Changes:
+
+1. **Remove all mentions of Bitchat** and mesh/offline chat.
+2. **Clarify that chat will be normal real-time messaging via internet.**
+3. **Update mini-profile behavior**: make it clear that tapping a user pin opens a **bubble-style overlay** *on the map itself* — not a new screen.
+
+---
+
+Here’s the **revised README** with those changes applied:
+
+---
+
 # NearMe - A Map-Based Social App for Students
 
 ## 📱 Overview
 
-NearMe is a Flutter-based, full-stack social networking app designed for college students to discover and connect with peers around their campus. It leverages location data to plot users on a campus map, allowing them to browse student profiles, discover common interests, and eventually chat (online and offline via mesh networks).
+NearMe is a Flutter-based, full-stack social networking app designed for college students to discover and connect with peers around their campus. It leverages location data to plot users on a campus map, allowing them to browse student profiles, discover common interests, and chat in real time.
 
-The app is built with a strong focus on user privacy, clean UI/UX, and scalability for a real-world student community. The first MVP will use Firebase as a backend, and optionally support a future integration with Bitchat for offline peer-to-peer messaging.
+The app is built with a strong focus on user privacy, clean UI/UX, and scalability for real-world student communities. The first MVP will use Firebase as a backend with real-time chat support.
 
 ---
 
@@ -12,12 +26,13 @@ The app is built with a strong focus on user privacy, clean UI/UX, and scalabili
 
 ### 1. Google Sign-In
 
-* Users will authenticate using their Google account.
-* On first sign-in, they will be redirected to create their profile.
+* Users authenticate using their Google account.
+* On first sign-in, they are redirected to create their profile.
 
 ### 2. Profile Creation
 
-* After signing in, users will be prompted to set up their profile.
+* After signing in, users are prompted to set up their profile.
+
 * **Profile fields include:**
 
   * Name
@@ -26,97 +41,91 @@ The app is built with a strong focus on user privacy, clean UI/UX, and scalabili
   * Interests (e.g., Flutter, Web Dev, Design)
   * Profile Picture (upload via gallery or camera)
   * Social handles (optional)
-* Profiles will be stored in Firebase Firestore and accessible through UID.
+
+* Profiles are stored in Firebase Firestore and accessible via UID.
 
 ### 3. Campus Map View
 
-* Map is centered around the user's campus (static default region if GPS fails).
-* Each user is shown as a pin (or avatar) on the map, using their last known location.
-* Clicking a pin opens a mini-profile card.
+* The map is centered around the user's campus (with a static fallback region if GPS fails).
+* Each user is shown as a pin (avatar) on the map, using their last known location.
+* **Tapping a pin opens a floating bubble-style mini-profile card directly on the map** — not a separate screen.
 
 ### 4. User Discovery
 
-* A list view of nearby users will be available as an alternative to the map.
+* A list view of nearby users is also available as an alternative to the map.
 * Users can sort or filter profiles by department, year, or interest tags.
 
 ### 5. Profile View
 
-* Tapping on a user pin or list entry opens their full profile.
-* Display includes name, year, department, interests, and any social links.
-* There will be a visible badge or section: **"Offline Chat: Coming Soon"**
+* Tapping on a user pin or list entry reveals their full profile.
+* Includes name, year, department, interests, and social links.
 
 ### 6. Interest Button ("🔥 Interested")
+
 Each profile has an "Interested" button like a soft-like.
 
 When a user taps this:
 
-A notification is sent to the profile owner saying:
-"Someone is interested in your profile!"
-
-This is stored in Firestore for analytics and optional mutual matching in the future.
-
-Duplicate interest actions (spamming) will be throttled or blocked.
+* A notification is sent to the profile owner:
+  `"Someone is interested in your profile!"`
+* This is stored in Firestore for analytics and optional mutual matching in the future.
+* Duplicate interest actions (spamming) are throttled or blocked.
 
 ### 7. Notifications (Cloud Messaging)
+
 Users will receive push notifications via Firebase Cloud Messaging for:
 
-When someone hits "Interested" on their profile.
-
-When they receive a message (future feature).
+* When someone hits "Interested" on their profile.
+* When they receive a new message.
 
 Notification preferences will be configurable in future versions (e.g., mute for 24h, etc.).
 
-### 8. Placeholder for Chat
+### 8. Real-Time Chat 💬
 
-* MVP will not include real chat functionality.
-* Placeholder UI will suggest that offline chat is being built.
-* This prepares for future integration with Bitchat (optional mesh protocol).
+* Users can chat with others through real-time messaging using Firebase backend.
+* No offline or mesh-based chat — just reliable internet-based communication.
+* Future versions may include message reactions, media sharing, etc.
 
 ### 9. Clubs (Group Profiles) 🎭
-Any user can create a club — no restrictions or verification needed.
-Clubs are group-style profiles with:
-Banner image, description, category tags
-A feed of posts and announcements
-Admin(s) and members
 
-“Join Club” button (instead of “Follow”)
+Any user can create a club — no restrictions or verification needed.
+
+Clubs are group-style profiles with:
+
+* Banner image, description, and category tags
+* A feed of posts and announcements
+* Admin(s) and members
+* “Join Club” button (instead of “Follow”)
 
 Club creators become admins and can:
 
-Add/remove posts
+* Add/remove posts
+* Moderate members
 
-Moderate members
-
-Members get notified for new posts and events
-
-Great for both official and unofficial groups on campus — from "Coding Club" to "Chess & Chill" to "Garage Band Jammers"
+Members get notified for new posts and events.
+Great for both official and unofficial groups on campus — from *Coding Club* to *Garage Band Jammers*.
 
 ### 10. Privacy & Location Handling
 
-* Real-time GPS will NOT be used continuously to preserve battery and privacy.
-* Location updates will be requested only during key interactions (e.g., map open).
-* All data will be opt-in. Users can hide their location or temporarily disable it.
+* Real-time GPS is **not** used continuously to preserve battery and privacy.
+* Location updates are only triggered during key interactions (e.g., map open).
+* All data is opt-in. Users can hide their location or disable it temporarily.
 
 ---
 
 ## 💡 Future Features (Post-MVP)
 
-### 11. Offline Chat (via Bitchat integration)
+### 11. Profile Verification
 
-* Wrap Bitchat's P2P messaging into the app using Flutter bridge or a native wrapper.
-* Allow students to chat even without the internet using mesh technology.
+* Link student email (e.g., `@college.edu`) for a badge of authenticity.
 
-### 12. Profile Verification
+### 12. Event Broadcasting
 
-* Link student email (e.g., `@college.edu`) for badge of authenticity.
+* Users can post small events (e.g., "Flutter meetup near cafeteria") pinned to the map.
 
-### 13. Event Broadcasting
+### 13. Analytics for Admins (Optional)
 
-* Allow users to post small events (e.g., "Flutter meetup near cafeteria") pinned to the map.
-
-### 14. Analytics for Admins (Optional)
-
-* Admin dashboard with number of active users, peak times, interest tags heatmap.
+* Admin dashboard with number of active users, peak times, and interest tag heatmaps.
 
 ---
 
@@ -128,7 +137,7 @@ Great for both official and unofficial groups on campus — from "Coding Club" t
 * **Storage:** Firebase Storage (for profile pictures)
 * **Maps API:** Google Maps
 * **Location:** `geolocator` package
-* **Chat (Future):** Bitchat open-source bridge
+* **Chat:** Firebase-powered real-time messaging
 
 ---
 
@@ -143,7 +152,7 @@ Great for both official and unofficial groups on campus — from "Coding Club" t
  │   ├── profile/     # Profile creation + display
  │   ├── map/         # Campus map with user pins
  │   ├── discovery/   # List-based user browsing
- │   ├── chat/        # Placeholder / future chat integration
+ │   ├── chat/        # Real-time chat module
  ├── widgets/         # Reusable UI components
 ```
 
@@ -158,15 +167,25 @@ Great for both official and unofficial groups on campus — from "Coding Club" t
 
 ## 🧠 AI Code Assist Notes
 
-* Ensure all features are modular and structured by feature folder.
-* Use Riverpod for state control and DI.
-* Location updates should be handled with permission safety and minimal polling.
-* Firebase models should use `fromJson` and `toJson` conversions.
-* Maps should render user markers based on geo-coordinates from Firestore.
-* Include meaningful comments and test IDs for key widgets for Copilot-style tools.
+* Keep features modular and organized in feature folders.
+* Use Riverpod for state management and DI.
+* Ensure location updates are permission-safe and efficient.
+* Firebase models should use `fromJson`/`toJson` for serialization.
+* User pins on map should be rendered based on Firestore geo-coordinates.
+* Include comments and test IDs for Copilot-style tools.
 
 ---
 
 ## 💬 Final Note
 
-This README is intended to help both human collaborators and AI tools understand the goals, structure, and future scope of the NearMe app. Let's build something unforgettable!
+This README is designed to help both human collaborators and AI tools understand the architecture, purpose, and roadmap of the NearMe app. Let’s build something unforgettable!
+
+---
+
+Let me know if you want:
+
+* an **installation section**
+* a **screenshot or GIF demo**
+* or to add a **roadmap/bug tracker/contribution guide**
+
+Would you like those added next?
