@@ -2,13 +2,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthRepository {
-  final GoogleSignIn _googleSignIn =
-      GoogleSignIn(); 
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
   Future<User?> signInWithGoogle() async {
-    final googleUser =
-        await _googleSignIn.signIn(); 
+    await _googleSignIn.signOut(); // <-- Add this line
+    final googleUser = await _googleSignIn.signIn();
     if (googleUser == null) return null;
 
     final googleAuth = await googleUser.authentication;
@@ -41,5 +40,4 @@ class AuthRepository {
       password: password,
     );
   }
-
 }

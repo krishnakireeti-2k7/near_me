@@ -179,13 +179,3 @@ Great for both official and unofficial groups on campus — from *Coding Club* t
 ## 💬 Final Note
 
 This README is designed to help both human collaborators and AI tools understand the architecture, purpose, and roadmap of the NearMe app. Let’s build something unforgettable!
-
----
-
-Let me know if you want:
-
-* an **installation section**
-* a **screenshot or GIF demo**
-* or to add a **roadmap/bug tracker/contribution guide**
-
-Would you like those added next?

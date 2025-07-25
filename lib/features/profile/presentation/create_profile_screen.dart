@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
@@ -90,7 +91,7 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
     super.dispose();
   }
 
-  Future<void> _submitProfile() async {
+ Future<void> _submitProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => isLoading = true);
@@ -104,11 +105,9 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
 
     final profileRepo = ref.read(profileRepositoryProvider);
 
-    // TODO: Upload the picked image to a storage service (e.g., Firebase Storage)
-    // and get the download URL.
     final String imageUrl =
         _profileImage != null
-            ? 'YOUR_UPLOADED_IMAGE_URL' // Replace with the actual download URL
+            ? 'YOUR_UPLOADED_IMAGE_URL' // Replace with actual download URL
             : user.photoURL ?? '';
 
     final profile = UserProfileModel(
@@ -135,8 +134,12 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
 
     try {
       await profileRepo.createOrUpdateProfile(profile);
+
+      ref.invalidate(userProfileProvider(user.uid));
+
       setState(() => isLoading = false);
       showFloatingSnackBar(context, "Profile saved!");
+      GoRouter.of(context).go('/map');
     } catch (e) {
       setState(() => isLoading = false);
       showFloatingSnackBar(context, "Failed to save profile.");

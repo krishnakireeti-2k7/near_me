@@ -13,6 +13,9 @@ void showFloatingSnackBar(
       backgroundColor: backgroundColor,
       duration: duration,
       margin: const EdgeInsets.only(bottom: 80.0, left: 20.0, right: 20.0),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0), // Adds rounded corners
+      ),
     ),
   );
 }
