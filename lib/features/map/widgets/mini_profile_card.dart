@@ -97,7 +97,7 @@ class MiniProfileCard extends StatelessWidget {
                 icon: const Icon(Icons.whatshot, color: Colors.white),
                 label: const Text('Interested'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepOrange,
+                  backgroundColor: Colors.deepOrangeAccent,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
                   ),

@@ -10,6 +10,7 @@ import 'package:near_me/features/profile/repository/profile_repository_provider.
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
 // Import the new widgets
@@ -105,34 +106,52 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
 
     final profileRepo = ref.read(profileRepositoryProvider);
 
-    final String imageUrl =
-        _profileImage != null
-            ? 'YOUR_UPLOADED_IMAGE_URL' // Replace with actual download URL
-            : user.photoURL ?? '';
-
-    final profile = UserProfileModel(
-      uid: user.uid,
-      name: nameController.text.trim(),
-      collegeYear: yearController.text.trim(),
-      branch: branchController.text.trim(),
-      interests:
-          interestsController.text
-              .split(',')
-              .map((e) => e.trim())
-              .where((e) => e.isNotEmpty)
-              .toList(),
-      profileImageUrl: imageUrl,
-      socialHandles: {
-        'instagram': instagramController.text.trim(),
-        'twitter': twitterController.text.trim(),
-      },
-      location:
-          (_userLatitude != null && _userLongitude != null)
-              ? GeoPoint(_userLatitude!, _userLongitude!)
-              : null,
-    );
+    // Non-nullable imageUrl
+    late String imageUrl;
 
     try {
+      if (_profileImage != null) {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('profile_images')
+            .child('${user.uid}_profile.jpg');
+
+        final metadata = SettableMetadata(contentType: 'image/jpeg');
+        final uploadTask = storageRef.putFile(_profileImage!, metadata);
+
+        final snapshot = await uploadTask.whenComplete(() {});
+        if (snapshot.state == TaskState.success) {
+          imageUrl = await storageRef.getDownloadURL();
+          print('✅ Upload successful. Image URL: $imageUrl');
+        } else {
+          throw Exception('❌ Upload failed: TaskState = ${snapshot.state}');
+        }
+      } else {
+        imageUrl = user.photoURL ?? '';
+      }
+
+      final profile = UserProfileModel(
+        uid: user.uid,
+        name: nameController.text.trim(),
+        collegeYear: yearController.text.trim(),
+        branch: branchController.text.trim(),
+        interests:
+            interestsController.text
+                .split(',')
+                .map((e) => e.trim())
+                .where((e) => e.isNotEmpty)
+                .toList(),
+        profileImageUrl: imageUrl,
+        socialHandles: {
+          'instagram': instagramController.text.trim(),
+          'twitter': twitterController.text.trim(),
+        },
+        location:
+            (_userLatitude != null && _userLongitude != null)
+                ? GeoPoint(_userLatitude!, _userLongitude!)
+                : null,
+      );
+
       await profileRepo.createOrUpdateProfile(profile);
 
       ref.invalidate(userProfileProvider(user.uid));
@@ -140,9 +159,14 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
       setState(() => isLoading = false);
       showFloatingSnackBar(context, "Profile saved!");
       GoRouter.of(context).go('/map');
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('Error saving profile: $e');
+      print('Stack Trace: $stackTrace');
       setState(() => isLoading = false);
-      showFloatingSnackBar(context, "Failed to save profile.");
+      showFloatingSnackBar(
+        context,
+        "Failed to save profile. Check console for details.",
+      );
     }
   }
 
