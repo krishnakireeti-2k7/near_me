@@ -5,8 +5,12 @@ import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository.dart';
 
 // Provide the ProfileRepository with both Firestore and Auth instances
+// Provide the ProfileRepository with both Firestore and Auth instances
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
-  return ProfileRepository(FirebaseFirestore.instance, FirebaseAuth.instance);
+  return ProfileRepository(
+    firestore: FirebaseFirestore.instance,
+    auth: FirebaseAuth.instance,
+  );
 });
 
 // Get any user's profile by UID

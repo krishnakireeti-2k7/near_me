@@ -1,17 +1,3 @@
-Got it, Kireeti. Here’s what I’ll do:
-
-### ✅ Requested Changes:
-
-1. **Remove all mentions of Bitchat** and mesh/offline chat.
-2. **Clarify that chat will be normal real-time messaging via internet.**
-3. **Update mini-profile behavior**: make it clear that tapping a user pin opens a **bubble-style overlay** *on the map itself* — not a new screen.
-
----
-
-Here’s the **revised README** with those changes applied:
-
----
-
 # NearMe - A Map-Based Social App for Students
 
 ## 📱 Overview
