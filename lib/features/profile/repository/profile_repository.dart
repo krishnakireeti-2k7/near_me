@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -69,5 +70,17 @@ class ProfileRepository {
       'toUserId': toUserId,
       'timestamp': FieldValue.serverTimestamp(),
     });
+  }
+
+  // NEW: Update user's location in Firestore
+  Future<void> updateUserLocation(String userId, GeoPoint location) async {
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'location': location,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Error updating user location: $e');
+    }
   }
 }

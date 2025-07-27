@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
@@ -12,6 +11,7 @@ import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/map/controller/map_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
+import 'package:geolocator/geolocator.dart'; // NEW: Import geolocator
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -23,6 +23,50 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
+
+  // NEW: Add initState and a permission check method
+  @override
+  void initState() {
+    super.initState();
+    _checkLocationPermissionAndStartUpdates();
+  }
+
+  // NEW: Add a dispose method to clean up the timer
+  @override
+  void dispose() {
+    ref.read(mapControllerProvider).stopLocationUpdates();
+    super.dispose();
+  }
+
+  // NEW: Method to handle permission requests and starting the timer
+  Future<void> _checkLocationPermissionAndStartUpdates() async {
+    final currentUser = ref.read(authStateProvider).value;
+    if (currentUser == null) return;
+
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      debugPrint("Location services are disabled.");
+      // Optional: show a dialog to enable services
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        debugPrint("Location permissions are denied.");
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      debugPrint("Location permissions are permanently denied.");
+      return;
+    }
+
+    // If we have permission, start the periodic updates
+    ref.read(mapControllerProvider).startLocationUpdates(currentUser.uid);
+  }
 
   Future<void> _updateMarkers(List<UserProfileModel> users) async {
     final Set<Marker> newMarkers = {};
@@ -211,7 +255,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 initialCameraPosition: CameraPosition(
                   target: LatLng(userLocation.latitude, userLocation.longitude),
                   zoom:
-                      18, // Changed zoom from 15 to 18 for a more zoomed-in view
+                      19, 
                 ),
                 markers: _markers,
                 myLocationEnabled: true,
