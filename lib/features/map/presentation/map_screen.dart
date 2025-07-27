@@ -1,4 +1,3 @@
-// file: map_screen.dart
 
 import 'dart:async';
 import 'dart:ui' as ui;

@@ -7,6 +7,7 @@ import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/map/widgets/interests_section.dart';
 import 'package:near_me/features/map/widgets/mini_profile_header.dart';
+import 'package:near_me/widgets/showFloatingsnackBar.dart';
 
 class MiniProfileCard extends ConsumerWidget {
   final UserProfileModel user;
@@ -89,48 +90,103 @@ class MiniProfileCard extends ConsumerWidget {
               if (currentUser != null && !isCurrentUser)
                 Padding(
                   padding: const EdgeInsets.only(top: 16.0),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFff6b6b), Color(0xFFf08d0e)],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: ElevatedButton.icon(
-                        icon: const Icon(
-                          Icons.whatshot,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        label: const Text(
-                          'Interested',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFff6b6b), Color(0xFFf08d0e)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
                             borderRadius: BorderRadius.circular(24),
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: () {
-                          ref
-                              .read(profileRepositoryProvider)
-                              .saveInterest(currentUser.uid, user.uid);
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('You are interested!'),
+                          child: ElevatedButton.icon(
+                            icon: const Icon(
+                              Icons.whatshot,
+                              color: Colors.white,
+                              size: 20,
                             ),
-                          );
-                        },
+                            label: const Text(
+                              'Interested',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () {
+                              ref
+                                  .read(profileRepositoryProvider)
+                                  .saveInterest(currentUser.uid, user.uid);
+                              Navigator.of(context).pop();
+                              showFloatingSnackBar(
+                                context,
+                                'Notified to the person!',
+                              );
+                            },
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                          onPressed: () {
+                            showFloatingSnackBar(
+                              context,
+                              'Chat feature coming soon!',
+                            );
+                          },
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.chat_bubble_outline,
+                                    color: Colors.grey,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Chat',
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                '(Coming Soon)',
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
             ],
