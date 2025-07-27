@@ -9,6 +9,7 @@ class UserProfileModel {
   final String profileImageUrl;
   final Map<String, String> socialHandles;
   final GeoPoint? location;
+  final String shortBio; // ADDED: The short bio field
 
   UserProfileModel({
     required this.uid,
@@ -19,6 +20,7 @@ class UserProfileModel {
     required this.profileImageUrl,
     required this.socialHandles,
     this.location,
+    required this.shortBio, // ADDED: To the constructor
   });
 
   Map<String, dynamic> toMap() {
@@ -31,6 +33,7 @@ class UserProfileModel {
       'profileImageUrl': profileImageUrl,
       'socialHandles': socialHandles,
       'location': location,
+      'shortBio': shortBio, // ADDED: To the map
     };
   }
 
@@ -48,6 +51,7 @@ class UserProfileModel {
               ? Map<String, String>.from(map['socialHandles'])
               : {},
       location: map['location'] != null ? map['location'] as GeoPoint : null,
+      shortBio: map['shortBio'] ?? '', // ADDED: From the map
     );
   }
 
@@ -61,6 +65,7 @@ class UserProfileModel {
       profileImageUrl: '',
       socialHandles: {},
       location: null,
+      shortBio: '', // ADDED: To the empty constructor
     );
   }
 }

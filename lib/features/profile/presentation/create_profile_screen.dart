@@ -92,7 +92,7 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
     super.dispose();
   }
 
- Future<void> _submitProfile() async {
+  Future<void> _submitProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => isLoading = true);
@@ -150,6 +150,7 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
             (_userLatitude != null && _userLongitude != null)
                 ? GeoPoint(_userLatitude!, _userLongitude!)
                 : null,
+        shortBio: bioController.text.trim(),
       );
 
       await profileRepo.createOrUpdateProfile(profile);
