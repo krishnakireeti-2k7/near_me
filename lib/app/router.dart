@@ -31,6 +31,10 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (profile == null) return '/create-profile';
 
+      // **THIS IS THE NEW LINE OF CODE**
+      // Call the initPushNotifications method here.
+      ref.read(authControllerProvider).initPushNotifications();
+
       return '/map';
     },
     routes: [
