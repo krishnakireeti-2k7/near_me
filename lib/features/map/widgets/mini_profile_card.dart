@@ -3,11 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
-import 'package:near_me/features/auth/auth_controller.dart';
-import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
-import 'package:near_me/features/map/widgets/interests_section.dart';
+import 'package:near_me/features/auth/auth_controller.dart'; // To get current user UID
+import 'package:near_me/features/profile/repository/profile_repository_provider.dart'; // For saveInterest
+import 'package:near_me/features/map/widgets/interests_section.dart'; // Ensure this widget is updated too!
 import 'package:near_me/features/map/widgets/mini_profile_header.dart';
-import 'package:near_me/widgets/showFloatingsnackBar.dart';
+import 'package:near_me/widgets/showFloatingsnackBar.dart'; // Ensure this is available
 
 class MiniProfileCard extends ConsumerWidget {
   final UserProfileModel user;
@@ -19,15 +19,13 @@ class MiniProfileCard extends ConsumerWidget {
     final currentUser = ref.watch(authStateProvider).value;
     final isCurrentUser = currentUser?.uid == user.uid;
 
-    String? imageUrlToShow;
-    if (user.profileImageUrl.isNotEmpty) {
-      imageUrlToShow = user.profileImageUrl;
-    } else if ((user as dynamic).googlePhotoUrl != null &&
-        (user as dynamic).googlePhotoUrl.isNotEmpty) {
-      imageUrlToShow = (user as dynamic).googlePhotoUrl;
-    } else {
-      imageUrlToShow = null;
-    }
+    // Determine the image URL to show: user's profileImageUrl, or fallback to Google photo URL
+    String? imageUrlToShow =
+        user.profileImageUrl.isNotEmpty
+            ? user.profileImageUrl
+            : (isCurrentUser
+                ? currentUser?.photoURL
+                : null); // Fallback for current user
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -46,7 +44,11 @@ class MiniProfileCard extends ConsumerWidget {
                 isCurrentUser: isCurrentUser,
                 imageUrlToShow: imageUrlToShow,
               ),
-              InterestsSection(interests: user.interests),
+              const SizedBox(height: 12), // Space between header and tags/bio
+              // MODIFIED: Pass user.tags to InterestsSection
+              InterestsSection(
+                tags: user.tags,
+              ), // Renamed parameter to 'tags' in InterestsSection
 
               if ((user.socialHandles['instagram'] ?? '').isNotEmpty ||
                   (user.socialHandles['twitter'] ?? '').isNotEmpty) ...[
@@ -57,7 +59,7 @@ class MiniProfileCard extends ConsumerWidget {
                   Row(
                     children: [
                       const Icon(
-                        Icons.camera_alt,
+                        Icons.share, // Better placeholder for social share/link
                         size: 18,
                         color: Colors.purple,
                       ),
@@ -74,7 +76,7 @@ class MiniProfileCard extends ConsumerWidget {
                     child: Row(
                       children: [
                         const Icon(
-                          Icons.alternate_email,
+                          Icons.share, // Consistent icon for social share/link
                           size: 18,
                           color: Colors.blue,
                         ),
@@ -111,7 +113,10 @@ class MiniProfileCard extends ConsumerWidget {
                             ),
                             label: const Text(
                               'Interested',
-                              style: TextStyle(fontSize: 16),
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.white,
+                              ), // Ensure text is white
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.transparent,

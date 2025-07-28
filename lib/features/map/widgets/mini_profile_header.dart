@@ -18,6 +18,8 @@ class MiniProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment:
+          CrossAxisAlignment.start, // Align top for better layout
       children: [
         CircleAvatar(
           radius: 28,
@@ -27,6 +29,7 @@ class MiniProfileHeader extends StatelessWidget {
               imageUrlToShow == null
                   ? const Icon(Icons.person, size: 28)
                   : null,
+          backgroundColor: Colors.grey[200], // Placeholder background
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -34,12 +37,21 @@ class MiniProfileHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment:
+                    CrossAxisAlignment.baseline, // Align text baselines
+                textBaseline:
+                    TextBaseline
+                        .alphabetic, // Required for crossAxisAlignment.baseline
                 children: [
-                  Text(
-                    user.name,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                  Flexible(
+                    // Use Flexible to prevent overflow
+                    child: Text(
+                      user.name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis, // Handle long names
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -63,10 +75,9 @@ class MiniProfileHeader extends StatelessWidget {
                     ),
                 ],
               ),
-              Text(
-                "${user.collegeYear} • ${user.branch}",
-                style: TextStyle(color: Colors.grey[700], fontSize: 13),
-              ),
+
+              // REMOVED: "${user.collegeYear} • ${user.branch}"
+              // This line is removed as these fields are no longer in the model.
               if (user.shortBio.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 4.0),

@@ -1,8 +1,10 @@
+// file: lib/features/profile/repository/profile_repository.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; // For debugPrint
 import 'package:near_me/features/profile/model/user_profile_model.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Note: flutter_riverpod is not needed here, only in the provider file.
 
 class ProfileRepository {
   final FirebaseFirestore _firestore;
@@ -82,5 +84,28 @@ class ProfileRepository {
     } catch (e) {
       debugPrint('Error updating user location: $e');
     }
+  }
+
+  // NEW METHOD: To update a single field in a user's profile
+  Future<void> updateUserProfileField({
+    required String uid,
+    required String field,
+    required dynamic value,
+  }) async {
+    try {
+      await _firestore.collection('users').doc(uid).update({field: value});
+    } catch (e) {
+      debugPrint("Error updating user profile field '$field': $e");
+      rethrow;
+    }
+  }
+
+  // Stream to get all user profiles for map (will be modified in a later step for filtering)
+  Stream<List<UserProfileModel>> getAllUserProfilesStream() {
+    return _firestore.collection('users').snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => UserProfileModel.fromMap(doc.data()!))
+          .toList();
+    });
   }
 }

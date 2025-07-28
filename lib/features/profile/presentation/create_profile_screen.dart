@@ -1,20 +1,20 @@
 // lib/features/profile/presentation/create_profile_screen.dart
 
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // For Timestamp and GeoPoint
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
-import 'package:near_me/widgets/showFloatingsnackBar.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:near_me/widgets/showFloatingsnackBar.dart'; // Ensure this is updated in a later step
+import 'package:geolocator/geolocator.dart'; // For location handling
+import 'package:firebase_storage/firebase_storage.dart'; // For image upload
+import 'package:image_picker/image_picker.dart'; // For picking images
 
 // Import the new widgets
-import 'package:near_me/widgets/profile_form.dart';
+import 'package:near_me/widgets/profile_form.dart'; // Ensure this widget is updated
 import 'package:near_me/widgets/profile_image_picker.dart';
 
 class CreateProfileScreen extends ConsumerStatefulWidget {
@@ -29,12 +29,13 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final nameController = TextEditingController();
-  final yearController = TextEditingController();
-  final branchController = TextEditingController();
-  final interestsController = TextEditingController();
+  // REMOVED: yearController and branchController as they are no longer in UserProfileModel
+  final tagsController =
+      TextEditingController(); // MODIFIED: Renamed from interestsController
   final instagramController = TextEditingController();
   final twitterController = TextEditingController();
-  final bioController = TextEditingController();
+  final bioController =
+      TextEditingController(); // Renamed from shortBioController for consistency with model field 'shortBio'
 
   File? _profileImage;
   bool isLoading = false;
@@ -49,28 +50,45 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
 
   Future<void> _getUserLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+    if (!serviceEnabled) {
+      // You might want to show a SnackBar or dialog here
+      debugPrint("Location services are disabled.");
+      return;
+    }
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.deniedForever ||
           permission == LocationPermission.denied) {
+        // You might want to show a SnackBar or dialog here
+        debugPrint("Location permissions are denied or permanently denied.");
         return;
       }
     }
 
-    final position = await Geolocator.getCurrentPosition();
-    setState(() {
-      _userLatitude = position.latitude;
-      _userLongitude = position.longitude;
-    });
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high, // Request high accuracy
+      );
+      setState(() {
+        _userLatitude = position.latitude;
+        _userLongitude = position.longitude;
+      });
+      debugPrint("Location obtained: $_userLatitude, $_userLongitude");
+    } catch (e) {
+      debugPrint("Error getting location: $e");
+      // Handle potential errors like timeout
+    }
   }
 
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final XFile? pickedFile = await picker.pickImage(
       source: ImageSource.gallery,
+      imageQuality: 80, // Compress image quality
+      maxWidth: 800, // Max width for the image
+      maxHeight: 800, // Max height for the image
     );
 
     if (pickedFile != null) {
@@ -83,9 +101,9 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
   @override
   void dispose() {
     nameController.dispose();
-    yearController.dispose();
-    branchController.dispose();
-    interestsController.dispose();
+    // yearController.dispose(); // REMOVED
+    // branchController.dispose(); // REMOVED
+    tagsController.dispose(); // MODIFIED
     instagramController.dispose();
     twitterController.dispose();
     bioController.dispose();
@@ -93,7 +111,13 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
   }
 
   Future<void> _submitProfile() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      showFloatingSnackBar(
+        context,
+        "Please fill all required fields correctly.",
+      );
+      return;
+    }
 
     setState(() => isLoading = true);
 
@@ -104,7 +128,9 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
       return;
     }
 
-    final profileRepo = ref.read(profileRepositoryProvider);
+    final profileRepo = ref.read(
+      profileRepositoryProvider,
+    ); // Use userProfileRepositoryProvider
 
     // Non-nullable imageUrl
     late String imageUrl;
@@ -124,19 +150,25 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
           imageUrl = await storageRef.getDownloadURL();
           print('✅ Upload successful. Image URL: $imageUrl');
         } else {
-          throw Exception('❌ Upload failed: TaskState = ${snapshot.state}');
+          // If upload fails, fallback to existing photoURL or empty string
+          imageUrl = user.photoURL ?? '';
+          debugPrint(
+            '❌ Upload failed: TaskState = ${snapshot.state}. Falling back to default URL.',
+          );
         }
       } else {
-        imageUrl = user.photoURL ?? '';
+        imageUrl =
+            user.photoURL ??
+            ''; // Use existing Firebase user photo if no new image picked
       }
 
       final profile = UserProfileModel(
         uid: user.uid,
         name: nameController.text.trim(),
-        collegeYear: yearController.text.trim(),
-        branch: branchController.text.trim(),
-        interests:
-            interestsController.text
+        // REMOVED: collegeYear and branch
+        tags:
+            tagsController
+                .text // MODIFIED: Renamed from interests
                 .split(',')
                 .map((e) => e.trim())
                 .where((e) => e.isNotEmpty)
@@ -150,23 +182,32 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
             (_userLatitude != null && _userLongitude != null)
                 ? GeoPoint(_userLatitude!, _userLongitude!)
                 : null,
-        shortBio: bioController.text.trim(),
+        shortBio:
+            bioController.text
+                .trim(), // Corrected to match model field 'shortBio'
+        lastActive:
+            Timestamp.now(), // NEW: Set lastActive upon profile creation
       );
 
-      await profileRepo.createOrUpdateProfile(profile);
+      await profileRepo.createOrUpdateProfile(
+        profile,
+      ); // Ensure this method exists and correctly uses toMap()
 
+      // Invalidate the provider so the map screen gets the updated profile immediately
       ref.invalidate(userProfileProvider(user.uid));
 
       setState(() => isLoading = false);
-      showFloatingSnackBar(context, "Profile saved!");
-      GoRouter.of(context).go('/map');
+      showFloatingSnackBar(context, "Profile created successfully!");
+      GoRouter.of(
+        context,
+      ).go('/map'); // Navigate to map after successful creation
     } catch (e, stackTrace) {
       print('Error saving profile: $e');
       print('Stack Trace: $stackTrace');
       setState(() => isLoading = false);
       showFloatingSnackBar(
         context,
-        "Failed to save profile. Check console for details.",
+        "Failed to save profile. Please try again.",
       );
     }
   }
@@ -199,17 +240,19 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
                         onPickImage: _pickImage,
                       ),
                       const SizedBox(height: 32),
+                      // MODIFIED: Update ProfileForm parameters
                       ProfileForm(
                         formKey: _formKey,
                         nameController: nameController,
-                        yearController: yearController,
-                        branchController: branchController,
-                        bioController: bioController,
-                        interestsController: interestsController,
+                        // REMOVED: yearController, branchController
+                        bioController: bioController, // Pass the bioController
+                        tagsController:
+                            tagsController, // MODIFIED: Pass tagsController
                         instagramController: instagramController,
                         twitterController: twitterController,
                         onSubmit: _submitProfile,
                       ),
+                      const SizedBox(height: 24), // Added some bottom padding
                     ],
                   ),
                 ),
