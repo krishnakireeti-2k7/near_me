@@ -84,14 +84,31 @@ class ViewProfileScreen extends ConsumerWidget {
                       onPressed: () => Navigator.of(context).pop(),
                     ),
             actions: [
-              if (!isCurrentUser)
+              if (isCurrentUser) // Enable edit button for current user
                 IconButton(
-                  icon: Icon(
-                    Icons.message_rounded,
-                    color: Colors.black,
-                  ),
+                  icon: const Icon(
+                    Icons.edit_note_rounded,
+                    size: 28,
+                  ), // A slightly larger, modern edit icon
+                  color:
+                      theme
+                          .colorScheme
+                          .primary, // Use primary color for consistency
                   onPressed: () {
-                    showFloatingSnackBar(context, 'chat feature coming soon');
+                    // Navigate to EditProfileScreen, passing the current user's UID
+                    context.push('/edit-profile/${profile.uid}');
+                  },
+                ),
+              if (!isCurrentUser) // Example: Message button for other users
+                IconButton(
+                  icon: const Icon(Icons.message_rounded),
+                  color: theme.colorScheme.primary,
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Chat feature coming soon!'),
+                      ),
+                    );
                   },
                 ),
             ],

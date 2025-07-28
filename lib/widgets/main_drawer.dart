@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // <-- ADD THIS IMPORT
+import 'package:firebase_auth/firebase_auth.dart';
 
 class MainDrawer extends ConsumerWidget {
   const MainDrawer({super.key});
@@ -14,7 +14,7 @@ class MainDrawer extends ConsumerWidget {
     // Get the current user's profile using the provider
     final userProfileAsync = ref.watch(currentUserProfileProvider);
     // Get the current Firebase user to access their email
-    final firebaseUser = FirebaseAuth.instance.currentUser; // <-- ADD THIS
+    final firebaseUser = FirebaseAuth.instance.currentUser;
 
     return Drawer(
       child: ListView(
@@ -24,9 +24,7 @@ class MainDrawer extends ConsumerWidget {
             data: (userProfile) {
               return UserAccountsDrawerHeader(
                 accountName: Text(userProfile?.name ?? 'Guest'),
-                accountEmail: Text(
-                  firebaseUser?.email ?? '',
-                ), // <-- CHANGED THIS
+                accountEmail: Text(firebaseUser?.email ?? ''),
                 currentAccountPicture: CircleAvatar(
                   backgroundImage:
                       userProfile?.profileImageUrl != null &&
@@ -64,10 +62,20 @@ class MainDrawer extends ConsumerWidget {
             leading: const Icon(Icons.person),
             title: const Text('My Profile'),
             onTap: () {
-              context.pop();
-              context.go('/profile');
+              context.pop(); // Close the drawer
+              final currentUserUid = FirebaseAuth.instance.currentUser?.uid;
+              if (currentUserUid != null) {
+                // Navigate directly to the EditProfileScreen for the current user
+                context.go(
+                  '/edit-profile/$currentUserUid',
+                ); // <-- CHANGED THIS LINE
+              } else {
+                // Handle case where user is not logged in (though router redirect should catch this)
+                context.go('/login');
+              }
             },
           ),
+          // Add other ListTiles for other drawer items if you have them
         ],
       ),
     );

@@ -11,16 +11,17 @@ import 'package:near_me/features/map/presentation/map_screen.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
+// IMPORT THE NEW EDIT PROFILE SCREEN
+import 'package:near_me/features/profile/presentation/edit_profile_screen.dart'; // <--- ADD THIS IMPORT
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authAsync = ref.watch(authStateProvider);
   final auth = authAsync.asData?.value;
 
-  // IMPORTANT: Ensure auth.uid is not null before watching userProfileProvider
   final currentProfileAsync =
       auth != null
           ? ref.watch(userProfileProvider(auth.uid))
-          : const AsyncValue.data(null); // No profile if not authenticated
+          : const AsyncValue.data(null);
   final currentProfile = currentProfileAsync.asData?.value;
 
   return GoRouter(
@@ -47,7 +48,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       // --- END DEBUG PRINTS ---
 
       // 1. If authentication or profile data is still loading, stay on the current route.
-      // This prevents premature redirects.
       if (authAsync.isLoading || currentProfileAsync.isLoading) {
         print(
           'Status: Loading Auth or Profile. Staying on current route (null redirect).',
@@ -64,21 +64,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       // 3. If authenticated but profile loading failed (hasError) or profile doesn't exist
+      // And the current route is NOT the edit-profile route.
+      // This allows the /edit-profile route to still fetch data even if it's currently null
+      // for the purpose of pre-filling.
+      final isCreatingOrEditingProfile =
+          state.matchedLocation == '/create-profile' ||
+          state.matchedLocation.startsWith('/edit-profile');
+
       if (currentProfileAsync.hasError || currentProfile == null) {
         print(
           'Status: Profile error or No Profile found. Redirecting to /create-profile if not already there.',
         );
-        return (state.matchedLocation != '/create-profile')
-            ? '/create-profile'
-            : null;
+        // If they are on an edit/create profile screen, don't redirect away
+        if (isCreatingOrEditingProfile) {
+          return null; // Stay on the create/edit screen
+        }
+        return '/create-profile'; // Redirect to create profile
       }
 
       // If we reach here, user is authenticated and has a profile.
-      // It's safe to call initPushNotifications here, but typically it's better
-      // to do this once when MapScreen is built to avoid repeated calls in redirects.
-      // Temporarily REMOVING from here based on previous suggestion to move to MapScreen.
-      // ref.read(authControllerProvider).initPushNotifications();
-
       // 4. If the user is authenticated, has a profile, and is on a setup-related route,
       // redirect them to the map.
       if (state.matchedLocation == '/login' ||
@@ -133,6 +137,18 @@ final routerProvider = Provider<GoRouter>((ref) {
             userId: userId,
             isCurrentUser: currentUserUid == userId,
           );
+        },
+      ),
+
+      // ADD THE NEW EDIT PROFILE ROUTE HERE
+      GoRoute(
+        path: '/edit-profile/:userId', // Define the path with a parameter
+        name:
+            'editProfile', // Give it a name for easier navigation (optional but good practice)
+        builder: (context, state) {
+          final userId =
+              state.pathParameters['userId']!; // Extract userId from path
+          return EditProfileScreen(userId: userId);
         },
       ),
     ],

@@ -1,5 +1,4 @@
 // file: lib/features/map/presentation/map_screen.dart
-
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
@@ -18,6 +17,7 @@ import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:near_me/widgets/main_drawer.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Timestamp/GeoPoint if not already
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -126,22 +126,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _locationStatusMessage = message;
 
       // Show snackbar if there's a new message
-      if (message != null && action != null) {
+      if (message != null) {
+        // Changed to check for message existence only
         WidgetsBinding.instance.addPostFrameCallback((_) {
           showFloatingSnackBar(
             context,
             message,
-            actionLabel: 'Settings', // Or 'Enable'
+            actionLabel:
+                action != null
+                    ? 'Settings'
+                    : null, // Only show label if action exists
             onActionPressed: action,
             duration: const Duration(seconds: 5), // Keep it on screen longer
-          );
-        });
-      } else if (message != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          showFloatingSnackBar(
-            context,
-            message,
-            duration: const Duration(seconds: 5),
           );
         });
       }
@@ -227,21 +223,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     // Draw shadow
     canvas.drawCircle(
-      Offset(markerSize / 2, markerSize / 2), // FIX: Removed const
-      (markerSize / 2) - 5, // Offset slightly for shadow effect
+      Offset(markerSize / 2, markerSize / 2),
+      (markerSize / 2) - 5,
       shadowPaint,
     );
 
     // Draw outer border (white circle)
     canvas.drawCircle(
-      Offset(markerSize / 2, markerSize / 2), // FIX: Removed const
+      Offset(markerSize / 2, markerSize / 2),
       (markerSize / 2),
       borderPaint,
     );
 
     // Draw the profile image
     final Rect imageRect = Rect.fromCircle(
-      center: Offset(markerSize / 2, markerSize / 2), // FIX: Removed const
+      center: Offset(markerSize / 2, markerSize / 2),
       radius: profilePicSize / 2,
     );
 
@@ -271,7 +267,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           image,
           Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
           imageRect,
-          Paint(), // FIX: Removed filterQuality parameter
+          Paint(),
         );
         canvas.restore();
       } catch (e) {
@@ -334,7 +330,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   ) {
     final placeholderPaint = Paint()..color = Colors.grey[300]!;
     canvas.drawCircle(
-      Offset(markerSize / 2, markerSize / 2), // FIX: Removed const
+      Offset(markerSize / 2, markerSize / 2),
       profilePicSize / 2,
       placeholderPaint,
     );
@@ -356,6 +352,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
+  // NEW: Helper method to animate camera
+  void _animateCameraToUserLocation(GeoPoint? location) {
+    if (_mapController != null &&
+        location != null &&
+        location.latitude != 0 &&
+        location.longitude != 0) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(location.latitude, location.longitude),
+          19,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).value;
@@ -369,8 +380,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       profile_repo.userLocationsProvider,
     ); // Use the prefixed provider
     // This provider gives you the current user's profile, including their location
-    // FIX: Access userProfileProvider via the repository's main import
     final currentUserProfileAsync = ref.watch(userProfileProvider(user.uid));
+
+    // NEW: Listen for changes in the current user's profile location
+    ref.listen<AsyncValue<UserProfileModel?>>(userProfileProvider(user.uid), (
+      _,
+      next,
+    ) {
+      // Ensure the map controller is ready and new location data is valid
+      if (next.hasValue && next.value != null && next.value!.location != null) {
+        _animateCameraToUserLocation(next.value!.location);
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -424,16 +445,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           'assets/map_style.json',
                         );
                         await _mapController?.setMapStyle(jsonString);
-                        // Move camera to user's location or default after map is created
-                        _mapController?.animateCamera(
-                          CameraUpdate.newLatLngZoom(cameraTarget, 19),
-                        );
+                        // Initial move camera to user's location or default after map is created
+                        // This ensures centering on initial load/rebuild
+                        _animateCameraToUserLocation(
+                          currentUser?.location ?? null,
+                        ); // Use the new method
                       } catch (e) {
                         debugPrint('Failed to load map style: $e');
                       }
                     },
                     initialCameraPosition: CameraPosition(
-                      // This is just the very initial position
+                      // This is just the very initial position that will be immediately updated by onMapCreated
                       target: cameraTarget,
                       zoom: 19,
                     ),
