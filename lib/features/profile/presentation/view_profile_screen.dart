@@ -42,6 +42,7 @@ class ViewProfileScreen extends ConsumerWidget {
           );
         }
 
+        // Calculation for lastActiveText (will still be performed for other users)
         String lastActiveText = "Never active";
         Color lastActiveColor = Colors.grey;
         if (profile.lastActive != null) {
@@ -163,14 +164,29 @@ class ViewProfileScreen extends ConsumerWidget {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        lastActiveText,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: lastActiveColor,
-                          fontStyle: FontStyle.italic,
+                      // --- MODIFIED SECTION START ---
+                      if (!isCurrentUser) // If NOT the current user, show last active status
+                        Text(
+                          lastActiveText,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: lastActiveColor,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
+                        )
+                      else // If it IS the current user, show a custom message
+                        Text(
+                          'Your Profile', // You can change this text to something like 'This is you!' or 'Active now' if you prefer
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color:
+                                theme
+                                    .colorScheme
+                                    .primary, // Using primary color for emphasis
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
+                      // --- MODIFIED SECTION END ---
                     ],
                   ),
                 ),

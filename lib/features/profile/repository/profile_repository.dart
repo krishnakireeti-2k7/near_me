@@ -79,12 +79,16 @@ class ProfileRepository {
     try {
       await _firestore.collection('users').doc(userId).update({
         'location': location,
-        'lastUpdated': FieldValue.serverTimestamp(),
+        'lastActive': FieldValue.serverTimestamp(), 
       });
+      debugPrint(
+        'User location and lastActive updated for $userId',
+      ); // Added for clearer debugging
     } catch (e) {
       debugPrint('Error updating user location: $e');
     }
   }
+
 
   // NEW METHOD: To update a single field in a user's profile
   Future<void> updateUserProfileField({
