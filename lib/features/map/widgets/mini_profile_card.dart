@@ -9,6 +9,10 @@ import 'package:near_me/features/map/widgets/interests_section.dart';
 import 'package:near_me/features/map/widgets/mini_profile_header.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
+import 'package:near_me/services/local_interests_service.dart';
+
+// Maximum daily interests allowed
+const int maxDailyInterests = 10;
 
 class MiniProfileCard extends ConsumerWidget {
   final UserProfileModel user;
@@ -26,14 +30,14 @@ class MiniProfileCard extends ConsumerWidget {
             : (isCurrentUser ? currentUser?.photoURL : null);
 
     const primaryGradient = LinearGradient(
-      colors: [Color(0xFFff6b6b), Color(0xFFf08d0e)], // Red/Orange gradient
+      colors: [Color(0xFFff6b6b), Color(0xFFf08d0e)],
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
     );
 
     const reversedGradient = LinearGradient(
-      colors: [Color(0xFFff6b6b), Color(0xFFf08d0e)], // Same colors
-      begin: Alignment.centerRight, // Reversed direction
+      colors: [Color(0xFFff6b6b), Color(0xFFf08d0e)],
+      begin: Alignment.centerRight,
       end: Alignment.centerLeft,
     );
 
@@ -44,14 +48,7 @@ class MiniProfileCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            // --- MODIFIED HERE TO MAKE IT DARKER ---
-            color: const Color.fromRGBO(
-              0,
-              0,
-              0,
-              0.3,
-            ), // Increased opacity from 0.1 to 0.3
-            // --- END MODIFICATION ---
+            color: const Color.fromRGBO(0, 0, 0, 0.3),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -68,8 +65,8 @@ class MiniProfileCard extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
 
-          if (user.tags != null && user.tags!.isNotEmpty) ...[
-            InterestsSection(tags: user.tags!),
+          if (user.tags.isNotEmpty) ...[
+            InterestsSection(tags: user.tags),
             const SizedBox(height: 12),
           ],
 
@@ -141,15 +138,42 @@ class MiniProfileCard extends ConsumerWidget {
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      onPressed: () {
-                        ref
-                            .read(profileRepositoryProvider)
-                            .saveInterest(currentUser.uid, user.uid);
-                        Navigator.of(context).pop();
+                      onPressed: () async {
+                        final localInterestsService = ref.read(
+                          localInterestsServiceProvider,
+                        );
+                        final profileRepo = ref.read(profileRepositoryProvider);
+
+                        final currentDailyCount =
+                            await localInterestsService
+                                .getDailyInterestsCount();
+
+                        if (currentDailyCount >= maxDailyInterests) {
+                          showFloatingSnackBar(
+                            context,
+                            'Daily limit reached. Try again tomorrow! 😊',
+                          );
+                          return;
+                        }
+
+                        if (currentUser.uid != null && user.uid != null) {
+                          // 1. Increment the local counter for spam prevention
+                          await localInterestsService
+                              .incrementDailyInterestsCount();
+                          // 2. Save the interest to Firestore and increment the server-side count
+                          await profileRepo.saveInterest(
+                            currentUser.uid,
+                            user.uid,
+                          );
+                          // The Firestore StreamProvider handles the real-time UI update for the map counter
+                        }
+
+                        // Corrected order: Show snackbar first, then pop
                         showFloatingSnackBar(
                           context,
                           'Notified to the person!',
                         );
+                        Navigator.of(context).pop();
                       },
                     ),
                   ),

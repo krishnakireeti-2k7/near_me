@@ -11,7 +11,8 @@ class UserProfileModel {
   final GeoPoint? location;
   final String shortBio;
   final Timestamp? lastActive;
-  final String? fcmToken; // <--- ADD THIS LINE
+  final String? fcmToken;
+  final int totalInterestsCount; // Keep this for all-time count
 
   UserProfileModel({
     required this.uid,
@@ -22,7 +23,8 @@ class UserProfileModel {
     this.location,
     required this.shortBio,
     this.lastActive,
-    this.fcmToken, // <--- ADD THIS LINE TO THE CONSTRUCTOR
+    this.fcmToken,
+    this.totalInterestsCount = 0, // Default for total count
   });
 
   Map<String, dynamic> toMap() {
@@ -35,7 +37,8 @@ class UserProfileModel {
       'location': location,
       'shortBio': shortBio,
       'lastActive': lastActive,
-      'fcmToken': fcmToken, // <--- ADD THIS LINE TO THE toMap METHOD
+      'fcmToken': fcmToken,
+      'totalInterestsCount': totalInterestsCount,
     };
   }
 
@@ -52,7 +55,8 @@ class UserProfileModel {
       location: map['location'] != null ? map['location'] as GeoPoint : null,
       shortBio: map['shortBio'] as String? ?? '',
       lastActive: map['lastActive'] as Timestamp?,
-      fcmToken: map['fcmToken'] as String?, // <--- ADD THIS LINE TO fromMap
+      fcmToken: map['fcmToken'] as String?,
+      totalInterestsCount: map['totalInterestsCount'] as int? ?? 0,
     );
   }
 
@@ -66,7 +70,8 @@ class UserProfileModel {
       location: null,
       shortBio: '',
       lastActive: null,
-      fcmToken: null, // <--- ADD THIS LINE TO THE empty CONSTRUCTOR
+      fcmToken: null,
+      totalInterestsCount: 0,
     );
   }
 
@@ -79,7 +84,8 @@ class UserProfileModel {
     GeoPoint? location,
     String? shortBio,
     Timestamp? lastActive,
-    String? fcmToken, // <--- ADD THIS LINE TO copyWith
+    String? fcmToken,
+    int? totalInterestsCount,
   }) {
     return UserProfileModel(
       uid: uid ?? this.uid,
@@ -91,6 +97,7 @@ class UserProfileModel {
       shortBio: shortBio ?? this.shortBio,
       lastActive: lastActive ?? this.lastActive,
       fcmToken: fcmToken ?? this.fcmToken,
+      totalInterestsCount: totalInterestsCount ?? this.totalInterestsCount,
     );
   }
 }

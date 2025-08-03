@@ -1,81 +1,96 @@
 // file: main.dart
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:near_me/app/router.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'firebase_options.dart';
-import 'services/notification_service.dart';
-
-// This is a top-level function to handle background messages.
-// It must not be an anonymous function or a method on a class.
-@pragma('vm:entry-point') // A must for background handlers
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // If you're using other Firebase services in the background, such as Firestore,
-  // make sure to call `initializeApp` before using other Firebase services.
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  print('Handling a background message ${message.messageId}');
-
-  // You can optionally show a local notification here if needed,
-  // but avoid full NotificationService initialization that relies on Riverpod Ref.
-  // For example:
-  // final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  // const AndroidInitializationSettings initializationSettingsAndroid =
-  //     AndroidInitializationSettings('@mipmap/ic_launcher');
-  // const InitializationSettings initializationSettings =
-  //     InitializationSettings(android: initializationSettingsAndroid);
-  // await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-  // if (message.notification != null) {
-  //   flutterLocalNotificationsPlugin.show(
-  //     0,
-  //     message.notification!.title!,
-  //     message.notification!.body!,
-  //     const NotificationDetails(android: AndroidNotificationDetails('high_importance_channel', 'High Importance Notifications')),
-  //   );
-  // }
-}
+import 'package:near_me/app/app.dart'; // For AppTheme
+import 'package:near_me/app/router.dart'; // <--- CORRECT IMPORT for routerProvider (assuming lib/router.dart)
+import 'package:near_me/features/auth/auth_controller.dart';
+import 'package:near_me/features/profile/model/user_profile_model.dart';
+import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
+import 'package:near_me/firebase_options.dart';
+import 'package:near_me/services/local_interests_service.dart';
+import 'package:near_me/widgets/showFloatingsnackBar.dart'; // Import your custom utility
+import 'package:near_me/services/notification_service.dart'; // Assuming this provides notificationServiceProvider
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // Register the background message handler
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
   runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends ConsumerStatefulWidget {
-  // <--- CHANGE to ConsumerStatefulWidget
   const MyApp({super.key});
 
   @override
-  ConsumerState<MyApp> createState() => _MyAppState(); // <--- Create state
+  ConsumerState<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends ConsumerState<MyApp> {
-  // <--- New State class
+  int? _previousTotalInterestsCount;
+
   @override
   void initState() {
     super.initState();
-    // Initialize NotificationService here, where 'ref' is available and guaranteed to run once
-    // Access it via the provider and then call initNotifications
     Future.microtask(() {
-      // Use Future.microtask to ensure the build context is fully ready
       ref.read(notificationServiceProvider).initNotifications();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final router = ref.watch(routerProvider);
+    // Watch the auth state, not just for the listener, but potentially for UI
+    // (though not directly used in this snippet's return)
+    final authState = ref.watch(authStateProvider);
+
+    ref.listen<AsyncValue<UserProfileModel?>>(
+      currentUserProfileStreamProvider,
+      (previous, next) async {
+        final newProfile = next.value;
+
+        if (newProfile != null && newProfile.uid.isNotEmpty) {
+          if (_previousTotalInterestsCount == null) {
+            _previousTotalInterestsCount = newProfile.totalInterestsCount;
+            print('Initial totalInterestsCount: $_previousTotalInterestsCount');
+          }
+
+          if (newProfile.totalInterestsCount >
+              (_previousTotalInterestsCount ?? 0)) {
+            // It's an interest! Show your custom delightful toast at the top.
+            if (context.mounted) {
+              showFloatingSnackBar(
+                context,
+                'Someone is interested in you!',
+                backgroundColor: Colors.amber.shade700,
+                textColor: Colors.white,
+                leadingIcon: Icons.whatshot, // <--- Fire emoji icon
+                duration: const Duration(seconds: 3),
+                position: SnackBarPosition.top, // <--- NEW: Display at the top
+              );
+            }
+
+            // Also, increment the local daily interests count
+            await ref
+                .read(localInterestsServiceProvider)
+                .incrementDailyInterestsCount();
+            print('Local daily interests count incremented!');
+          }
+
+          _previousTotalInterestsCount = newProfile.totalInterestsCount;
+        } else if (newProfile == null && _previousTotalInterestsCount != null) {
+          _previousTotalInterestsCount = null;
+          print(
+            'User logged out or profile became null, resetting previous count.',
+          );
+        }
+      },
+    );
 
     return MaterialApp.router(
       title: 'NearMe',
-      debugShowCheckedModeBanner: false,
-      routerConfig: router,
+      debugShowCheckedModeBanner: false, // <--- ADDED THIS LINE
+      routerConfig: ref.watch(routerProvider), // <--- CORRECTED THIS LINE
     );
   }
 }

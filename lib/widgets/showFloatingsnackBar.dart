@@ -2,19 +2,36 @@
 
 import 'package:flutter/material.dart';
 
+// Define an enum for SnackBar position
+enum SnackBarPosition { top, bottom } // <--- NEW ENUM
+
 void showFloatingSnackBar(
   BuildContext context,
   String message, {
-  Color?
-  backgroundColor, // Now optional, defaults to SnackBar's default if null
-  Color textColor = Colors.white, // New: Allows custom text color
-  Duration duration = const Duration(
-    seconds: 3,
-  ), // Slightly increased default duration
+  Color? backgroundColor,
+  Color textColor = Colors.white,
+  Duration duration = const Duration(seconds: 3),
   String? actionLabel,
   VoidCallback? onActionPressed,
-  IconData? leadingIcon, // New: Optional leading icon
+  IconData? leadingIcon,
+  SnackBarPosition position =
+      SnackBarPosition.bottom, // <--- NEW PARAMETER with default
 }) {
+  EdgeInsets margin;
+  if (position == SnackBarPosition.top) {
+    // Calculate margin for top, adjusting for the status bar (safe area)
+    margin = EdgeInsets.only(
+      top:
+          MediaQuery.of(context).padding.top +
+          20.0, // 20.0 from status bar bottom
+      left: 20.0,
+      right: 20.0,
+    );
+  } else {
+    // Original bottom margin
+    margin = const EdgeInsets.only(bottom: 80.0, left: 20.0, right: 20.0);
+  }
+
   final SnackBar snackBar = SnackBar(
     content: Row(
       children: [
@@ -22,36 +39,22 @@ void showFloatingSnackBar(
           Icon(leadingIcon, color: textColor),
           const SizedBox(width: 10),
         ],
-        Expanded(
-          child: Text(
-            message,
-            style: TextStyle(color: textColor), // Apply custom text color
-          ),
-        ),
+        Expanded(child: Text(message, style: TextStyle(color: textColor))),
       ],
     ),
     behavior: SnackBarBehavior.floating,
     backgroundColor:
-        backgroundColor ??
-        Theme.of(
-          context,
-        ).colorScheme.inverseSurface, // Use provided color, or theme default
+        backgroundColor ?? Theme.of(context).colorScheme.inverseSurface,
     duration: duration,
-    margin: const EdgeInsets.only(
-      bottom: 80.0,
-      left: 20.0,
-      right: 20.0,
-    ), // Consistent margin
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12.0), // Rounded corners
-    ),
-    elevation: 6.0, // Adds a subtle shadow for a better floating effect
+    margin: margin, // <--- Use the dynamically determined margin
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+    elevation: 6.0,
     action:
         (actionLabel != null && onActionPressed != null)
             ? SnackBarAction(
               label: actionLabel,
               onPressed: onActionPressed,
-              textColor: Colors.amberAccent, // Color for the action button text
+              textColor: Colors.amberAccent,
             )
             : null,
   );

@@ -1,4 +1,5 @@
 // file: lib/features/map/presentation/map_screen.dart
+
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
@@ -9,15 +10,15 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:near_me/features/map/widgets/mini_profile_card.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/map/controller/map_controller.dart';
-// IMPORTANT: Add 'as profile_repo' to clarify which userLocationsProvider to use
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart'
-    as profile_repo; // Aliased for clarity
-import 'package:near_me/features/profile/repository/profile_repository_provider.dart'; // Keep this for userProfileProvider
+    as profile_repo;
+import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:near_me/widgets/main_drawer.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import Timestamp/GeoPoint if not already
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:near_me/features/map/widgets/daily_interests_counter_widget.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -30,30 +31,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
 
-  // State variables to track permission and service status
   bool _isLocationPermissionGranted = false;
   bool _isLocationServiceEnabled = false;
   String? _locationStatusMessage;
 
-  // A default campus location (replace with your actual campus center)
-  static const LatLng _defaultCampusLocation = LatLng(
-    17.4375,
-    78.4482,
-  ); // Example: Center of Hyderabad
+  late final MapController _mapControllerInstanceForCleanup;
+
+  static const LatLng _defaultCampusLocation = LatLng(17.4375, 78.4482);
 
   @override
   void initState() {
     super.initState();
+    _mapControllerInstanceForCleanup = ref.read(mapControllerProvider);
     _checkLocationPermissionAndStartUpdates();
   }
 
   @override
   void dispose() {
-    // Only stop updates if location permission was granted and updates were started
-    if (_isLocationPermissionGranted && _isLocationServiceEnabled) {
-      ref.read(mapControllerProvider).stopLocationUpdates();
-    }
-    _mapController?.dispose(); // Dispose map controller
+    _mapControllerInstanceForCleanup.stopLocationUpdates();
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -75,7 +71,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
       return;
     }
-    _updateLocationStatus(isServiceEnabled: true); // Service is enabled
+    _updateLocationStatus(isServiceEnabled: true);
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -102,11 +98,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return;
     }
 
-    // If we reach here, permissions are granted and service is enabled
     _updateLocationStatus(isPermissionGranted: true, message: null);
-
-    // Only start location updates if we have permission
-    ref.read(mapControllerProvider).startLocationUpdates(currentUser.uid);
+    _mapControllerInstanceForCleanup.startLocationUpdates(currentUser.uid);
   }
 
   void _updateLocationStatus({
@@ -125,20 +118,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
       _locationStatusMessage = message;
 
-      // Show snackbar if there's a new message
       if (message != null) {
-        // Changed to check for message existence only
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          showFloatingSnackBar(
-            context,
-            message,
-            actionLabel:
-                action != null
-                    ? 'Settings'
-                    : null, // Only show label if action exists
-            onActionPressed: action,
-            duration: const Duration(seconds: 5), // Keep it on screen longer
-          );
+          if (mounted) {
+            showFloatingSnackBar(
+              context,
+              message,
+              actionLabel: action != null ? 'Settings' : null,
+              onActionPressed: action,
+              duration: const Duration(seconds: 5),
+            );
+          }
         });
       }
     });
@@ -146,7 +136,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Future<void> _updateMarkers(List<UserProfileModel> users) async {
     final Set<Marker> newMarkers = {};
-    // Get the current user's UID to determine 'You' marker status
     final currentUserId = ref.read(authStateProvider).value?.uid;
 
     for (final user in users) {
@@ -154,23 +143,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           user.location!.latitude != 0 &&
           user.location!.longitude != 0) {
         String? imageUrlToShow = user.profileImageUrl;
-        // Fallback for current user's photoURL if profileImageUrl is empty
         if (imageUrlToShow == null || imageUrlToShow.isEmpty) {
           if (currentUserId != null && currentUserId == user.uid) {
             imageUrlToShow = ref.read(authStateProvider).value?.photoURL;
           }
         }
 
-        // Determine if the user is active based on lastActive timestamp
         final bool isActive =
             user.lastActive != null &&
-            DateTime.now().difference(user.lastActive!.toDate()).inMinutes <=
-                5; // Active if last seen within 5 minutes
+            DateTime.now().difference(user.lastActive!.toDate()).inMinutes <= 5;
 
-        final markerIcon = await _getCustomMarker(
-          imageUrlToShow,
-          isActive,
-        ); // Pass isActive
+        final markerIcon = await _getCustomMarker(imageUrlToShow, isActive);
         newMarkers.add(
           Marker(
             markerId: MarkerId(user.uid),
@@ -190,6 +173,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         );
       }
     }
+    if (!mounted) return;
     setState(() {
       _markers = newMarkers;
     });
@@ -201,41 +185,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   ) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
-    const double markerSize = 120.0; // Increased size for better visibility
-    const double borderSize = 6.0; // Border around profile pic
-    const double onlineIndicatorSize = 30.0; // Size of the online dot
+    const double markerSize = 120.0;
+    const double borderSize = 6.0;
+    const double onlineIndicatorSize = 30.0;
     const double profilePicSize = markerSize - (borderSize * 2);
 
     final Paint borderPaint =
         Paint()
           ..color = Colors.white
-          ..style = PaintingStyle.fill; // Changed to fill for solid border
-
+          ..style = PaintingStyle.fill;
     final Paint shadowPaint =
         Paint()
-          ..color = Colors.black.withOpacity(
-            0.3,
-          ) // Slightly more prominent shadow
-          ..maskFilter = const ui.MaskFilter.blur(
-            ui.BlurStyle.normal,
-            10.0,
-          ); // Increased blur for better shadow
-
-    // Draw shadow
+          ..color = Colors.black.withOpacity(0.3)
+          ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 10.0);
     canvas.drawCircle(
       Offset(markerSize / 2, markerSize / 2),
       (markerSize / 2) - 5,
       shadowPaint,
     );
-
-    // Draw outer border (white circle)
     canvas.drawCircle(
       Offset(markerSize / 2, markerSize / 2),
       (markerSize / 2),
       borderPaint,
     );
 
-    // Draw the profile image
     final Rect imageRect = Rect.fromCircle(
       center: Offset(markerSize / 2, markerSize / 2),
       radius: profilePicSize / 2,
@@ -272,27 +245,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         canvas.restore();
       } catch (e) {
         debugPrint('Error loading image for marker: $e');
-        // Fallback to placeholder if image fails to load
         _drawPlaceholder(canvas, markerSize, profilePicSize);
       }
     } else {
       _drawPlaceholder(canvas, markerSize, profilePicSize);
     }
 
-    // Draw online/offline indicator
     if (isActive) {
-      final Paint onlinePaint =
-          Paint()..color = Colors.greenAccent[700]!; // Vibrant green
+      final Paint onlinePaint = Paint()..color = Colors.greenAccent[700]!;
       final Paint onlineBorderPaint =
           Paint()
             ..color = Colors.white
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 4.0; // White border for contrast
-
+            ..strokeWidth = 4.0;
       final Offset indicatorPosition = Offset(
-        markerSize -
-            onlineIndicatorSize / 2 -
-            borderSize, // Position at bottom-right
+        markerSize - onlineIndicatorSize / 2 - borderSize,
         markerSize - onlineIndicatorSize / 2 - borderSize,
       );
 
@@ -305,10 +272,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         indicatorPosition,
         onlineIndicatorSize / 2 - 2,
         onlinePaint,
-      ); // Smaller circle inside border
-    } else {
-      // Optional: Draw an offline indicator (e.g., grey dot)
-      // For now, no indicator means offline to keep it simple.
+      );
     }
 
     final ui.Image markerImage = await pictureRecorder.endRecording().toImage(
@@ -334,12 +298,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       profilePicSize / 2,
       placeholderPaint,
     );
-
     final textPainter = TextPainter(
-      text: const TextSpan(
-        text: '👤',
-        style: TextStyle(fontSize: 48),
-      ), // Larger icon for placeholder
+      text: const TextSpan(text: '👤', style: TextStyle(fontSize: 48)),
       textDirection: TextDirection.ltr,
     );
     textPainter.layout();
@@ -352,7 +312,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
-  // NEW: Helper method to animate camera
   void _animateCameraToUserLocation(GeoPoint? location) {
     if (_mapController != null &&
         location != null &&
@@ -375,19 +334,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return const Scaffold(body: Center(child: Text("User not logged in.")));
     }
 
-    // This provider should give you all other users' locations
-    final userLocationsAsync = ref.watch(
-      profile_repo.userLocationsProvider,
-    ); // Use the prefixed provider
-    // This provider gives you the current user's profile, including their location
+    final userLocationsAsync = ref.watch(profile_repo.userLocationsProvider);
     final currentUserProfileAsync = ref.watch(userProfileProvider(user.uid));
 
-    // NEW: Listen for changes in the current user's profile location
     ref.listen<AsyncValue<UserProfileModel?>>(userProfileProvider(user.uid), (
       _,
       next,
     ) {
-      // Ensure the map controller is ready and new location data is valid
       if (next.hasValue && next.value != null && next.value!.location != null) {
         _animateCameraToUserLocation(next.value!.location);
       }
@@ -406,16 +359,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ),
       drawer: const MainDrawer(),
       body: Stack(
-        // Use Stack to place map and potentially messages
         children: [
-          // Always render the GoogleMap
           currentUserProfileAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error:
                 (err, _) => Center(child: Text('Error loading profile: $err')),
             data: (currentUser) {
               final LatLng cameraTarget;
-              // Set camera target based on user's location if available and permitted, otherwise use default campus
               if (_isLocationPermissionGranted &&
                   _isLocationServiceEnabled &&
                   currentUser != null &&
@@ -436,7 +386,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     (err, _) =>
                         Center(child: Text('Error loading users: $err')),
                 data: (users) {
-                  _updateMarkers(users); // Update markers for all users on map
+                  _updateMarkers(users);
                   return GoogleMap(
                     onMapCreated: (controller) async {
                       _mapController = controller;
@@ -445,30 +395,31 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           'assets/map_style.json',
                         );
                         await _mapController?.setMapStyle(jsonString);
-                        // Initial move camera to user's location or default after map is created
-                        // This ensures centering on initial load/rebuild
                         _animateCameraToUserLocation(
                           currentUser?.location ?? null,
-                        ); // Use the new method
+                        );
                       } catch (e) {
                         debugPrint('Failed to load map style: $e');
                       }
                     },
                     initialCameraPosition: CameraPosition(
-                      // This is just the very initial position that will be immediately updated by onMapCreated
                       target: cameraTarget,
                       zoom: 19,
                     ),
                     markers: _markers,
-                    myLocationEnabled:
-                        _isLocationPermissionGranted, // Enable/disable based on permission
-                    myLocationButtonEnabled:
-                        _isLocationPermissionGranted, // Enable/disable based on permission
-                    zoomControlsEnabled: true,
+                    myLocationEnabled: _isLocationPermissionGranted,
+                    myLocationButtonEnabled: _isLocationPermissionGranted,
+                    zoomControlsEnabled: false,
                   );
                 },
               );
             },
+          ),
+          // CORRECTED POSITION: Move the widget to the top-left to avoid UI conflicts
+          const Positioned(
+            top: 10,
+            left: 10,
+            child: DailyInterestsCounterWidget(),
           ),
         ],
       ),

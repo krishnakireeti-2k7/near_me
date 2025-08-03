@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
+import 'package:near_me/features/profile/repository/profile_repository_provider.dart'; // This contains currentUserProfileStreamProvider
 import 'package:firebase_auth/firebase_auth.dart';
 
 class MainDrawer extends ConsumerWidget {
@@ -11,8 +11,10 @@ class MainDrawer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Get the current user's profile using the provider
-    final userProfileAsync = ref.watch(currentUserProfileProvider);
+    // Get the current user's profile using the StreamProvider to get AsyncValue
+    final userProfileAsyncValue = ref.watch(
+      currentUserProfileStreamProvider,
+    ); // <-- CHANGED THIS LINE
     // Get the current Firebase user to access their email
     final firebaseUser = FirebaseAuth.instance.currentUser;
 
@@ -20,8 +22,10 @@ class MainDrawer extends ConsumerWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          userProfileAsync.when(
+          userProfileAsyncValue.when(
+            // Now you can use .when correctly
             data: (userProfile) {
+              // userProfile here is UserProfileModel?
               return UserAccountsDrawerHeader(
                 accountName: Text(userProfile?.name ?? 'Guest'),
                 accountEmail: Text(firebaseUser?.email ?? ''),
@@ -66,9 +70,7 @@ class MainDrawer extends ConsumerWidget {
               final currentUserUid = FirebaseAuth.instance.currentUser?.uid;
               if (currentUserUid != null) {
                 // Navigate directly to the EditProfileScreen for the current user
-                context.go(
-                  '/edit-profile/$currentUserUid',
-                ); // <-- CHANGED THIS LINE
+                context.go('/edit-profile/$currentUserUid');
               } else {
                 // Handle case where user is not logged in (though router redirect should catch this)
                 context.go('/login');
