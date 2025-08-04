@@ -4,19 +4,27 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:near_me/app/app.dart'; // For AppTheme
-import 'package:near_me/app/router.dart'; // <--- CORRECT IMPORT for routerProvider (assuming lib/router.dart)
+import 'package:near_me/app/app.dart';
+import 'package:near_me/app/router.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/firebase_options.dart';
 import 'package:near_me/services/local_interests_service.dart';
-import 'package:near_me/widgets/showFloatingsnackBar.dart'; // Import your custom utility
-import 'package:near_me/services/notification_service.dart'; // Assuming this provides notificationServiceProvider
+import 'package:near_me/widgets/showFloatingsnackBar.dart';
+import 'package:near_me/services/notification_service.dart';
+import 'package:firebase_app_check/firebase_app_check.dart'; // Import App Check
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize and activate App Check
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.playIntegrity,
+    appleProvider: AppleProvider.appAttest,
+  );
+
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -40,8 +48,6 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch the auth state, not just for the listener, but potentially for UI
-    // (though not directly used in this snippet's return)
     final authState = ref.watch(authStateProvider);
 
     ref.listen<AsyncValue<UserProfileModel?>>(
@@ -57,20 +63,18 @@ class _MyAppState extends ConsumerState<MyApp> {
 
           if (newProfile.totalInterestsCount >
               (_previousTotalInterestsCount ?? 0)) {
-            // It's an interest! Show your custom delightful toast at the top.
             if (context.mounted) {
               showFloatingSnackBar(
                 context,
                 'Someone is interested in you!',
                 backgroundColor: Colors.amber.shade700,
                 textColor: Colors.white,
-                leadingIcon: Icons.whatshot, // <--- Fire emoji icon
+                leadingIcon: Icons.whatshot,
                 duration: const Duration(seconds: 3),
-                position: SnackBarPosition.top, // <--- NEW: Display at the top
+                position: SnackBarPosition.top,
               );
             }
 
-            // Also, increment the local daily interests count
             await ref
                 .read(localInterestsServiceProvider)
                 .incrementDailyInterestsCount();
@@ -89,8 +93,8 @@ class _MyAppState extends ConsumerState<MyApp> {
 
     return MaterialApp.router(
       title: 'NearMe',
-      debugShowCheckedModeBanner: false, // <--- ADDED THIS LINE
-      routerConfig: ref.watch(routerProvider), // <--- CORRECTED THIS LINE
+      debugShowCheckedModeBanner: false,
+      routerConfig: ref.watch(routerProvider),
     );
   }
 }

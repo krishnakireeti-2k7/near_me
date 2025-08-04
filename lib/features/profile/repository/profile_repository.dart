@@ -121,11 +121,15 @@ class ProfileRepository {
 
   // Stream to get all user profiles for map
   Stream<List<UserProfileModel>> getAllUserProfilesStream() {
-    return _firestore.collection('users').snapshots().map((snapshot) {
-      return snapshot.docs
-          .map((doc) => UserProfileModel.fromMap(doc.data()!))
-          .toList();
-    });
+    return _firestore
+        .collection('users')
+        .orderBy('uid') // <--- FIX: Add this explicit orderBy clause
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map((doc) => UserProfileModel.fromMap(doc.data()!))
+              .toList();
+        });
   }
 
   // --- NEW METHOD: Stream a single user's profile ---

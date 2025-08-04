@@ -7,7 +7,7 @@ import 'package:near_me/features/profile/repository/profile_repository_provider.
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/services/local_interests_service.dart';
-import 'package:near_me/widgets/logout_dialog.dart'; // Import the new dialog widget
+import 'package:near_me/widgets/logout_dialog.dart';
 
 class MainDrawer extends ConsumerWidget {
   const MainDrawer({super.key});
@@ -24,7 +24,6 @@ class MainDrawer extends ConsumerWidget {
     return Drawer(
       child: Column(
         children: [
-          // --- Header Card with User Info ---
           SafeArea(
             child: userProfileAsyncValue.when(
               data: (userProfile) {
@@ -109,7 +108,6 @@ class MainDrawer extends ConsumerWidget {
 
           const Divider(indent: 16, endIndent: 16),
 
-          // --- Navigation Items ---
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
@@ -172,10 +170,12 @@ class MainDrawer extends ConsumerWidget {
                   context,
                   icon: Icons.logout_rounded,
                   title: 'Logout',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    // Now we simply call the new static method
-                    LogoutDialog.show(context, ref);
+                  // <--- FIX: Made the callback async and await the dialog
+                  onTap: () async {
+                    await LogoutDialog.show(context, ref);
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
                   },
                 ),
               ],

@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -30,20 +31,17 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
-
   bool _isLocationPermissionGranted = false;
   bool _isLocationServiceEnabled = false;
   String? _locationStatusMessage;
 
   late final MapController _mapControllerInstanceForCleanup;
-
   static const LatLng _defaultCampusLocation = LatLng(17.4375, 78.4482);
 
   @override
   void initState() {
     super.initState();
     _mapControllerInstanceForCleanup = ref.read(mapControllerProvider);
-    _checkLocationPermissionAndStartUpdates();
   }
 
   @override
@@ -53,8 +51,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     super.dispose();
   }
 
-  Future<void> _checkLocationPermissionAndStartUpdates() async {
-    final currentUser = ref.read(authStateProvider).value;
+  Future<void> _startLocationUpdatesIfPermitted(User? currentUser) async {
     if (currentUser == null) {
       _updateLocationStatus(message: "User not logged in.");
       return;
@@ -328,23 +325,27 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(authStateProvider).value;
+    // Watch the user profile stream. This is the key to fixing the race condition.
+    final userProfileAsyncValue = ref.watch(currentUserProfileStreamProvider);
 
-    if (user == null) {
-      return const Scaffold(body: Center(child: Text("User not logged in.")));
-    }
-
-    final userLocationsAsync = ref.watch(profile_repo.userLocationsProvider);
-    final currentUserProfileAsync = ref.watch(userProfileProvider(user.uid));
-
-    ref.listen<AsyncValue<UserProfileModel?>>(userProfileProvider(user.uid), (
-      _,
-      next,
-    ) {
-      if (next.hasValue && next.value != null && next.value!.location != null) {
-        _animateCameraToUserLocation(next.value!.location);
+    // Watch the auth state for initial location updates
+    ref.listen<AsyncValue<User?>>(authStateProvider, (previous, next) {
+      if (next.hasValue && next.value != null) {
+        _startLocationUpdatesIfPermitted(next.value);
       }
     });
+
+    // Listen for changes to the user's location to animate the camera.
+    ref.listen<AsyncValue<UserProfileModel?>>(
+      currentUserProfileStreamProvider,
+      (previous, next) {
+        if (next.hasValue &&
+            next.value != null &&
+            next.value!.location != null) {
+          _animateCameraToUserLocation(next.value!.location);
+        }
+      },
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -358,17 +359,27 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ),
       ),
       drawer: const MainDrawer(),
-      body: Stack(
-        children: [
-          currentUserProfileAsync.when(
+      body: userProfileAsyncValue.when(
+        data: (currentUser) {
+          if (currentUser == null) {
+            // Show a simple message if the user profile is null
+            return const Center(
+              child: Text("User profile not found. Please log in again."),
+            );
+          }
+
+          final userLocationsAsync = ref.watch(
+            profile_repo.userLocationsProvider,
+          );
+
+          return userLocationsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error:
-                (err, _) => Center(child: Text('Error loading profile: $err')),
-            data: (currentUser) {
+            error: (err, _) => Center(child: Text('Error loading users: $err')),
+            data: (users) {
+              _updateMarkers(users);
               final LatLng cameraTarget;
               if (_isLocationPermissionGranted &&
                   _isLocationServiceEnabled &&
-                  currentUser != null &&
                   currentUser.location != null &&
                   currentUser.location!.latitude != 0 &&
                   currentUser.location!.longitude != 0) {
@@ -380,14 +391,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 cameraTarget = _defaultCampusLocation;
               }
 
-              return userLocationsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error:
-                    (err, _) =>
-                        Center(child: Text('Error loading users: $err')),
-                data: (users) {
-                  _updateMarkers(users);
-                  return GoogleMap(
+              return Stack(
+                children: [
+                  GoogleMap(
                     onMapCreated: (controller) async {
                       _mapController = controller;
                       try {
@@ -395,9 +401,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           'assets/map_style.json',
                         );
                         await _mapController?.setMapStyle(jsonString);
-                        _animateCameraToUserLocation(
-                          currentUser?.location ?? null,
-                        );
+                        _animateCameraToUserLocation(currentUser.location);
                       } catch (e) {
                         debugPrint('Failed to load map style: $e');
                       }
@@ -410,18 +414,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     myLocationEnabled: _isLocationPermissionGranted,
                     myLocationButtonEnabled: _isLocationPermissionGranted,
                     zoomControlsEnabled: false,
-                  );
-                },
+                  ),
+                  const Positioned(
+                    top: 10,
+                    left: 10,
+                    child: DailyInterestsCounterWidget(),
+                  ),
+                ],
               );
             },
-          ),
-          // CORRECTED POSITION: Move the widget to the top-left to avoid UI conflicts
-          const Positioned(
-            top: 10,
-            left: 10,
-            child: DailyInterestsCounterWidget(),
-          ),
-        ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, _) => Center(child: Text('Error loading profile: $err')),
       ),
     );
   }
