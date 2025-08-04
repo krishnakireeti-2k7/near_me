@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
+import 'package:near_me/features/map/controller/map_controller.dart'; // <-- Import this!
 
 class LogoutDialog {
   static Future<void> show(BuildContext context, WidgetRef ref) async {
@@ -33,7 +34,7 @@ class LogoutDialog {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Are you sure you want to log out? make sure to come back 😢',
+                    'Are you sure you want to log out? Make sure to come back 😢',
                     style: textTheme.bodyLarge?.copyWith(
                       color: colorScheme.onSurface.withOpacity(0.7),
                     ),
@@ -80,7 +81,11 @@ class LogoutDialog {
     );
 
     if (confirmed == true) {
-      ref.read(authControllerProvider).signOut();
+      // 🔥 Step 1: Stop background location updates
+      ref.read(mapControllerProvider).signOutCleanup();
+
+      // 🔥 Step 2: Actually sign out
+      await ref.read(authControllerProvider).signOut();
     }
   }
 }

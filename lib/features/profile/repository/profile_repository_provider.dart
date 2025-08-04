@@ -61,9 +61,23 @@ final currentUserProfileProvider = Provider<UserProfileModel?>((ref) {
 
 // Stream to get all user profiles for the map
 final userLocationsProvider = StreamProvider<List<UserProfileModel>>((ref) {
-  final repository = ref.watch(profileRepositoryProvider);
-  return repository.getAllUserProfilesStream();
+  final authState = ref.watch(authStateProvider);
+
+  return authState.when(
+    data: (user) {
+      if (user != null) {
+        final repository = ref.read(profileRepositoryProvider);
+        return repository.getAllUserProfilesStream();
+      } else {
+        // Return empty list if not authenticated
+        return Stream.value([]);
+      }
+    },
+    loading: () => const Stream.empty(),
+    error: (_, __) => const Stream.empty(),
+  );
 });
+
 
 // ----------------------------------------------------
 // NEW: PROVIDERS FOR THE DAILY/ALL-TIME INTERESTS

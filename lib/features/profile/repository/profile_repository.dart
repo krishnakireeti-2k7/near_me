@@ -69,7 +69,7 @@ class ProfileRepository {
     await _firestore.collection('interests').add({
       'fromUserId': fromUserId,
       'toUserId': toUserId,
-      'timestamp': FieldValue.serverTimestamp(),
+      'timestamp': Timestamp.now(),
     });
 
     // NEW: Also increment the interested count for the recipient
