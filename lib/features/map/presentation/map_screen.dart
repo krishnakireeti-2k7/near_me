@@ -6,9 +6,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_google_maps_webservices/places.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:near_me/features/map/widgets/mini_profile_card.dart';
+import 'package:near_me/features/map/widgets/search_bar_widget.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/map/controller/map_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart'
@@ -37,6 +39,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   late final MapController _mapControllerInstanceForCleanup;
   static const LatLng _defaultLocation = LatLng(37.7749, -122.4194);
+
+  // NEW: Places API client
+  final places = GoogleMapsPlaces(apiKey: googleApiKey);
 
   @override
   void initState() {
@@ -309,6 +314,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
+  // NEW METHOD to handle a selected place from the search bar
+  void _onPlaceSelected(Prediction place) async {
+    if (_mapController == null) return;
+
+    // We need to get the place details to animate the camera.
+    // The details API call is needed to get the exact lat/lng of the place
+    final placeDetails = await places.getDetailsByPlaceId(place.placeId!);
+    final geometry = placeDetails.result?.geometry;
+
+    if (geometry?.location != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(geometry!.location.lat, geometry.location.lng),
+          19,
+        ),
+      );
+      // TODO: Here, you would also filter your user list to show users near this location
+    }
+  }
+
   void _animateCameraToUserLocation(GeoPoint? location) {
     if (_mapController != null &&
         location != null &&
@@ -417,45 +442,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       },
                     ),
                   ),
+                  // UPDATED: Replaced the old search bar with the new widget
                   Positioned(
                     top: 50,
                     left: 100,
                     right: 20,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      height: 56, // Standard TextField height
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          const Expanded(
-                            child: TextField(
-                              decoration: InputDecoration(
-                                hintText: 'Search people or interests',
-                                border: InputBorder.none,
-                                contentPadding: EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.search),
-                            onPressed: () {
-                              // TODO: Implement search functionality
-                            },
-                          ),
-                        ],
-                      ),
+                    child: SearchBarWidget(
+                      onPlaceSelected: _onPlaceSelected,
+                      onUserSearch: (query) {
+                        // TODO: Implement user search logic here.
+                      },
                     ),
                   ),
                   Positioned(

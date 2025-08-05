@@ -66,30 +66,36 @@ Users will receive push notifications via Firebase Cloud Messaging for:
 
 Notification preferences will be configurable in future versions (e.g., mute for 24h, etc.).
 
-### 8. Real-Time Chat 💬
+### 8. Ephemeral Chat System
+To optimize Firestore usage and reduce infrastructure costs, NearMe implements an ephemeral messaging system. Chat messages are automatically deleted 12 hours after creation.
 
-* Users can chat with others through real-time messaging using Firebase backend.
-* No offline or mesh-based chat — just reliable internet-based communication.
-* Future versions may include message reactions, media sharing, etc.
+🔧 Implementation Details:
+Each message document includes a timestamp field at creation.
 
-### 9. Clubs (Group Profiles) 🎭
+A scheduled Cloud Function runs periodically (e.g. every hour) to:
 
-Any user can create a club — no restrictions or verification needed.
+Query messages older than 12 hours.
 
-Clubs are group-style profiles with:
+Delete expired messages from Firestore.
 
-* Banner image, description, and category tags
-* A feed of posts and announcements
-* Admin(s) and members
-* “Join Club” button (instead of “Follow”)
+Alternatively, TTL (Time-To-Live) policies may be used if supported in future updates.
 
-Club creators become admins and can:
 
-* Add/remove posts
-* Moderate members
+### 🌐 Google Places Integration
+The search bar at the top of the map screen will be powered by the Google Places API.
 
-Members get notified for new posts and events.
-Great for both official and unofficial groups on campus — from *Coding Club* to *Garage Band Jammers*.
+Users can type in any location, and real-time suggestions will appear (e.g., cities, landmarks, campuses, etc.).
+
+On selecting a location, the map camera will instantly shift to the selected area.
+
+Users in that location will be displayed as pins on the map, just like nearby users.
+
+👤 Dual Suggestions: Locations + Users
+The search results UI will be split into two sections:
+
+The top half will show location suggestions (powered by Google Places).
+
+The bottom half will show user suggestions that match the search query by name.
 
 ### 10. Privacy & Location Handling
 
