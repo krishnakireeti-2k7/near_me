@@ -2,8 +2,7 @@
 
 import 'package:flutter/material.dart';
 
-// Define an enum for SnackBar position
-enum SnackBarPosition { top, bottom } // <--- NEW ENUM
+enum SnackBarPosition { top, bottom }
 
 void showFloatingSnackBar(
   BuildContext context,
@@ -14,39 +13,43 @@ void showFloatingSnackBar(
   String? actionLabel,
   VoidCallback? onActionPressed,
   IconData? leadingIcon,
-  SnackBarPosition position =
-      SnackBarPosition.bottom, // <--- NEW PARAMETER with default
+  SnackBarPosition position = SnackBarPosition.bottom,
+  bool isError = false, // <-- Add this new parameter
 }) {
   EdgeInsets margin;
   if (position == SnackBarPosition.top) {
-    // Calculate margin for top, adjusting for the status bar (safe area)
     margin = EdgeInsets.only(
-      top:
-          MediaQuery.of(context).padding.top +
-          20.0, // 20.0 from status bar bottom
+      top: MediaQuery.of(context).padding.top + 20.0,
       left: 20.0,
       right: 20.0,
     );
   } else {
-    // Original bottom margin
     margin = const EdgeInsets.only(bottom: 80.0, left: 20.0, right: 20.0);
   }
+
+  // Determine background and text color based on the new isError parameter
+  final effectiveBackgroundColor =
+      isError
+          ? Colors.red.shade700
+          : (backgroundColor ?? Theme.of(context).colorScheme.inverseSurface);
+  final effectiveTextColor = isError ? Colors.white : textColor;
 
   final SnackBar snackBar = SnackBar(
     content: Row(
       children: [
         if (leadingIcon != null) ...[
-          Icon(leadingIcon, color: textColor),
+          Icon(leadingIcon, color: effectiveTextColor),
           const SizedBox(width: 10),
         ],
-        Expanded(child: Text(message, style: TextStyle(color: textColor))),
+        Expanded(
+          child: Text(message, style: TextStyle(color: effectiveTextColor)),
+        ),
       ],
     ),
     behavior: SnackBarBehavior.floating,
-    backgroundColor:
-        backgroundColor ?? Theme.of(context).colorScheme.inverseSurface,
+    backgroundColor: effectiveBackgroundColor,
     duration: duration,
-    margin: margin, // <--- Use the dynamically determined margin
+    margin: margin,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
     elevation: 6.0,
     action:
@@ -59,7 +62,6 @@ void showFloatingSnackBar(
             : null,
   );
 
-  // Hide any currently showing snackbar before showing a new one
   ScaffoldMessenger.of(context).hideCurrentSnackBar();
   ScaffoldMessenger.of(context).showSnackBar(snackBar);
 }

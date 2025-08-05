@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository.dart';
-import 'package:near_me/features/auth/auth_controller.dart'; // Assuming authStateProvider is here
+import 'package:near_me/features/auth/auth_controller.dart';
 
 // Provide the ProfileRepository with both Firestore and Auth instances
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
@@ -78,7 +78,6 @@ final userLocationsProvider = StreamProvider<List<UserProfileModel>>((ref) {
   );
 });
 
-
 // ----------------------------------------------------
 // NEW: PROVIDERS FOR THE DAILY/ALL-TIME INTERESTS
 // ----------------------------------------------------
@@ -98,13 +97,34 @@ final dailyInterestsCountProvider = StreamProvider<int>((ref) {
   return Stream.value(0);
 });
 
-// New StreamProvider: To get the full list of interests (for the notifications screen)
+// **IMPORTANT UPDATE**
+// 1. New Provider: To expose the deleteInterest method from the repository.
+final interestDeletionProvider = Provider((ref) {
+  final repo = ref.read(profileRepositoryProvider);
+  return (String documentId) => repo.deleteInterest(documentId);
+});
+
+// 2. Updated StreamProvider: To get the full list of interests (for the notifications screen)
+//    This now correctly adds the documentId to each interest item.
 final allInterestsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
   final authState = ref.watch(authStateProvider);
 
   if (authState is AsyncData<User?> && authState.value != null) {
     final userId = authState.value!.uid;
-    return ref.read(profileRepositoryProvider).getAllInterestsStream(userId);
+    return ref
+        .read(profileRepositoryProvider)
+        .getAllInterestsStream(userId)
+        .map(
+          (querySnapshot) =>
+              querySnapshot.docs
+                  .map(
+                    (doc) => {
+                      ...doc.data() as Map<String, dynamic>,
+                      'documentId': doc.id, // This line is crucial for deletion
+                    },
+                  )
+                  .toList(),
+        );
   }
   return Stream.value([]);
 });

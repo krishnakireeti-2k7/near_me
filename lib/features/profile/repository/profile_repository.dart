@@ -46,7 +46,6 @@ class ProfileRepository {
 
   // New method to save an 'interested' action
   Future<void> saveInterest(String fromUserId, String toUserId) async {
-    // Prevent spamming by checking for recent interests from the same user
     final lastInterest =
         await _firestore
             .collection('interests')
@@ -60,20 +59,16 @@ class ProfileRepository {
       final lastTimestamp =
           (lastInterest.docs.first.data()['timestamp'] as Timestamp).toDate();
       if (DateTime.now().difference(lastTimestamp).inHours < 1) {
-        // If an interest has been sent in the last hour, do nothing
         return;
       }
     }
 
-    // Add the new interest to the 'interests' collection
     await _firestore.collection('interests').add({
       'fromUserId': fromUserId,
       'toUserId': toUserId,
       'timestamp': Timestamp.now(),
     });
 
-    // NEW: Also increment the interested count for the recipient
-    // (This part is still useful for the lifetime count on the notifications screen)
     await incrementInterestedCount(toUserId);
   }
 
@@ -121,15 +116,13 @@ class ProfileRepository {
 
   // Stream to get all user profiles for map
   Stream<List<UserProfileModel>> getAllUserProfilesStream() {
-    return _firestore
-        .collection('users')
-        .orderBy('uid') // <--- FIX: Add this explicit orderBy clause
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => UserProfileModel.fromMap(doc.data()!))
-              .toList();
-        });
+    return _firestore.collection('users').orderBy('uid').snapshots().map((
+      snapshot,
+    ) {
+      return snapshot.docs
+          .map((doc) => UserProfileModel.fromMap(doc.data()!))
+          .toList();
+    });
   }
 
   // --- NEW METHOD: Stream a single user's profile ---
@@ -143,10 +136,27 @@ class ProfileRepository {
   }
 
   // ----------------------------------------------------
-  // NEW: METHODS FOR THE DAILY/ALL-TIME INTERESTS
+  // UPDATED: METHODS FOR THE DAILY/ALL-TIME INTERESTS
   // ----------------------------------------------------
 
-  // NEW METHOD: Stream a list of interests received today
+  Stream<QuerySnapshot> getAllInterestsStream(String userId) {
+    return _firestore
+        .collection('interests')
+        .where('toUserId', isEqualTo: userId)
+        .orderBy('timestamp', descending: true)
+        .snapshots();
+  }
+
+  // NEW METHOD: To delete a specific interest document
+  Future<void> deleteInterest(String documentId) async {
+    try {
+      await _firestore.collection('interests').doc(documentId).delete();
+    } catch (e) {
+      debugPrint('Error deleting interest: $e');
+      rethrow;
+    }
+  }
+
   Stream<List<Map<String, dynamic>>> getDailyInterestsStream(String userId) {
     final startOfToday = DateTime.now().copyWith(
       hour: 0,
@@ -155,23 +165,12 @@ class ProfileRepository {
       millisecond: 0,
       microsecond: 0,
     );
-    // Convert to Firestore Timestamp for the query
     final startOfTodayTimestamp = Timestamp.fromDate(startOfToday);
 
     return _firestore
         .collection('interests')
         .where('toUserId', isEqualTo: userId)
         .where('timestamp', isGreaterThanOrEqualTo: startOfTodayTimestamp)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
-  }
-
-  // NEW METHOD: Stream a list of all-time interests
-  Stream<List<Map<String, dynamic>>> getAllInterestsStream(String userId) {
-    return _firestore
-        .collection('interests')
-        .where('toUserId', isEqualTo: userId)
-        .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }

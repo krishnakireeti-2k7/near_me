@@ -1,79 +1,60 @@
-// file: lib/features/interests/screens/interested_history_screen.dart
+// file: lib/features/profile/repository/profile_repository.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:near_me/features/profile/repository/profile_repository.dart';
-import 'package:near_me/features/interests/widgets/interest_tile.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:near_me/features/profile/model/user_profile_model.dart';
 
-class InterestedHistoryScreen extends ConsumerWidget {
-  const InterestedHistoryScreen({super.key});
+class ProfileRepository {
+  final FirebaseFirestore _firestore;
+  final FirebaseAuth _auth;
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
+  ProfileRepository({
+    required FirebaseFirestore firestore,
+    required FirebaseAuth auth,
+  }) : _firestore = firestore,
+       _auth = auth;
 
-    if (userId == null) {
-      return const Scaffold(body: Center(child: Text("Not logged in.")));
-    }
+  // ... (all other methods remain the same) ...
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('🔥 Interested History'),
-          bottom: const TabBar(
-            tabs: [Tab(text: 'Today'), Tab(text: 'All-Time')],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildInterestList(
-              stream: ProfileRepository(
-                firestore: FirebaseFirestore.instance,
-                auth: FirebaseAuth.instance,
-              ).getDailyInterestsStream(userId),
-            ),
-            _buildInterestList(
-              stream: ProfileRepository(
-                firestore: FirebaseFirestore.instance,
-                auth: FirebaseAuth.instance,
-              ).getAllInterestsStream(userId),
-            ),
-          ],
-        ),
-      ),
-    );
+  // ----------------------------------------------------
+  // UPDATED: METHODS FOR THE DAILY/ALL-TIME INTERESTS
+  // ----------------------------------------------------
+
+  // NEW METHOD: Stream a list of all-time interests (returns QuerySnapshot)
+  Stream<QuerySnapshot> getAllInterestsStream(String userId) {
+    return _firestore
+        .collection('interests')
+        .where('toUserId', isEqualTo: userId)
+        .orderBy('timestamp', descending: true)
+        .snapshots();
   }
 
-  Widget _buildInterestList({
-    required Stream<List<Map<String, dynamic>>> stream,
-  }) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: stream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+  // NEW METHOD: To delete a specific interest document
+  Future<void> deleteInterest(String documentId) async {
+    try {
+      await _firestore.collection('interests').doc(documentId).delete();
+    } catch (e) {
+      debugPrint('Error deleting interest: $e');
+      rethrow;
+    }
+  }
 
-        final interests = snapshot.data ?? [];
-
-        if (interests.isEmpty) {
-          return const Center(child: Text("No interests yet."));
-        }
-
-        return ListView.builder(
-          itemCount: interests.length,
-          itemBuilder: (context, index) {
-            final interest = interests[index];
-            final fromUserId = interest['fromUserId'] ?? 'Unknown';
-            final timestamp = (interest['timestamp'] as Timestamp).toDate();
-
-            return InterestTile(fromUserId: fromUserId, timestamp: timestamp);
-          },
-        );
-      },
+  // **IMPORTANT FIX:** This method now returns a Stream<QuerySnapshot>
+  Stream<QuerySnapshot> getDailyInterestsStream(String userId) {
+    final startOfToday = DateTime.now().copyWith(
+      hour: 0,
+      minute: 0,
+      second: 0,
+      millisecond: 0,
+      microsecond: 0,
     );
+    final startOfTodayTimestamp = Timestamp.fromDate(startOfToday);
+
+    return _firestore
+        .collection('interests')
+        .where('toUserId', isEqualTo: userId)
+        .where('timestamp', isGreaterThanOrEqualTo: startOfTodayTimestamp)
+        .snapshots(); // It now returns the raw QuerySnapshot
   }
 }

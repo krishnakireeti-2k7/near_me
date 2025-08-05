@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
+import 'package:near_me/widgets/showFloatingsnackBar.dart'; // assuming you have this
 
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
@@ -55,10 +56,42 @@ class NotificationsScreen extends ConsumerWidget {
               final interest = interests[index - 1];
               final fromUserId = interest['fromUserId'] ?? 'Unknown';
               final timestamp = interest['timestamp']?.toDate();
+              final documentId = interest['documentId'] as String?;
 
-              return NotificationCard(
-                fromUserId: fromUserId,
-                timestamp: timestamp,
+              if (documentId == null) {
+                // Safety check to prevent errors with incomplete data
+                return const SizedBox.shrink();
+              }
+
+              return Dismissible(
+                key: ValueKey(documentId),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  color: Colors.red,
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20.0),
+                  child: const Icon(Icons.delete, color: Colors.white),
+                ),
+                onDismissed: (direction) async {
+                  try {
+                    await ref.read(interestDeletionProvider)(documentId);
+                    if (context.mounted) {
+                      showFloatingSnackBar(context, 'Interest dismissed');
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      showFloatingSnackBar(
+                        context,
+                        'Failed to dismiss interest: $e',
+                        isError: true,
+                      );
+                    }
+                  }
+                },
+                child: NotificationCard(
+                  fromUserId: fromUserId,
+                  timestamp: timestamp,
+                ),
               );
             },
           );

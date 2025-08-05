@@ -1,71 +1,78 @@
 // file: functions/src/index.ts
 
+import * as functions from 'firebase-functions'; // v1
 import * as admin from 'firebase-admin';
+import * as pubsub from 'firebase-functions/v1/pubsub'; // ✅ Import v1 pubsub scheduler
 import { firestore } from 'firebase-functions/v2';
-// Removed 'dayjs' import as it's no longer needed for daily counter logic here
+import { setGlobalOptions } from 'firebase-functions/v2/options';
+
+
+setGlobalOptions({ region: 'us-central1' });
 
 admin.initializeApp();
 const db = admin.firestore();
 
-// This function is triggered whenever a new document is created in the 'interests' collection.
+// v2 Firestore Trigger
 export const sendInterestNotification = firestore.onDocumentCreated(
-    'interests/{interestId}',
-    async (event) => {
-        // Get the data from the new interest document
-        const interest = event.data?.data();
-        const fromUserId = interest?.fromUserId;
-        const toUserId = interest?.toUserId;
+  'interests/{interestId}',
+  async (event) => {
+    const interest = event.data?.data();
+    const fromUserId = interest?.fromUserId;
+    const toUserId = interest?.toUserId;
 
-        if (!toUserId || !fromUserId) {
-            console.log("Missing toUserId or fromUserId. Exiting.");
+    if (!toUserId || !fromUserId) return;
+
+    const recipientRef = db.collection('users').doc(toUserId);
+
+    try {
+      await recipientRef.update({
+        totalInterestsCount: admin.firestore.FieldValue.increment(1),
+      });
+    } catch {
+      await recipientRef.set({ totalInterestsCount: 1 }, { merge: true });
+    }
+
+    const updatedRecipientData = (await recipientRef.get()).data();
+    const fcmToken = updatedRecipientData?.fcmToken;
+
+    const senderName =
+      (await db.collection('users').doc(fromUserId).get()).data()?.name ??
+      'Someone';
+
+    if (fcmToken) {
+      await admin.messaging().send({
+        notification: {
+          title: 'New Interest!',
+          body: `${senderName} is interested in you!`,
+        },
+        token: fcmToken,
+      });
+    }
+  }
+);
+
+// ✅ Scheduled Function: Delete interests older than 30 days
+export const cleanupOldInterests = pubsub.schedule('every 24 hours').onRun(
+    async (context) => {
+        const thirtyDaysAgo = admin.firestore.Timestamp.fromDate(
+            new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        );
+
+        const oldInterestsSnapshot = await db.collection('interests')
+            .where('timestamp', '<', thirtyDaysAgo)
+            .get();
+
+        if (oldInterestsSnapshot.empty) {
+            console.log('No old interests to delete.');
             return;
         }
 
-        const recipientRef = db.collection('users').doc(toUserId);
+        const batch = db.batch();
+        oldInterestsSnapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
 
-        // --- UPDATED LOGIC: Only increment totalInterestsCount ---
-        try {
-            await recipientRef.update({
-                totalInterestsCount: admin.firestore.FieldValue.increment(1)
-            });
-            console.log(`Successfully incremented totalInterestsCount for user: ${toUserId}`);
-        } catch (error) {
-            console.error(`Error incrementing totalInterestsCount for user ${toUserId}:`, error);
-            // If the user document or field doesn't exist, this update might fail.
-            // Consider setting initial values if document is new, or ensuring documents are created on user signup.
-            await recipientRef.set({ totalInterestsCount: 1 }, { merge: true }); // Ensure it gets set if not present
-        }
-        // --- END UPDATED LOGIC ---
-
-        // Fetch the recipient's FCM token from the 'users' collection (to get latest data including counters)
-        const updatedRecipientDoc = await recipientRef.get();
-        const updatedRecipientData = updatedRecipientDoc.data();
-        const fcmToken = updatedRecipientData?.fcmToken;
-
-        if (!fcmToken) {
-            console.log(`FCM token not found for user ${toUserId}. Cannot send push notification.`);
-        }
-
-        // Fetch the sender's profile to get their name for the notification message
-        const senderDoc = await db.collection('users').doc(fromUserId).get();
-        const senderData = senderDoc.data();
-        const senderName = senderData?.name ?? 'Someone';
-
-        // Construct and send the push notification (only if token exists)
-        if (fcmToken) {
-            const payload = {
-                notification: {
-                    title: 'New Interest!',
-                    body: `${senderName} is interested in you!`,
-                },
-                token: fcmToken,
-            };
-
-            try {
-                const response = await admin.messaging().send(payload);
-                console.log('Successfully sent push message:', response);
-            } catch (error) {
-                console.error('Error sending push message:', error);
-            }
-        }
-    });
+        await batch.commit();
+        console.log(`Deleted ${oldInterestsSnapshot.docs.length} old interests.`);
+    }
+);
