@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:near_me/features/notificatons/notifications_screen.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
 class DailyInterestsCounterWidget extends ConsumerWidget {
@@ -9,12 +10,11 @@ class DailyInterestsCounterWidget extends ConsumerWidget {
 
   // Method to handle navigation to the notifications screen
   void _navigateToNotificationsScreen(BuildContext context) {
-    // TODO: Implement navigation to the new NotificationsScreen
-    // Example: Navigator.of(context).pushNamed(AppRoutes.notificationsScreen);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Will navigate to notifications screen.')),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
   }
+
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,7 +53,7 @@ class DailyInterestsCounterWidget extends ConsumerWidget {
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Colors.red,
+                    color: Colors.black,
                   ),
                 ),
               ],

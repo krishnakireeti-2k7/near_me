@@ -413,7 +413,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     markers: _markers,
                     myLocationEnabled: _isLocationPermissionGranted,
                     myLocationButtonEnabled: _isLocationPermissionGranted,
-                    zoomControlsEnabled: false,
+                    zoomControlsEnabled: true,
                   ),
                   const Positioned(
                     top: 10,
