@@ -36,7 +36,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   String? _locationStatusMessage;
 
   late final MapController _mapControllerInstanceForCleanup;
-  static const LatLng _defaultCampusLocation = LatLng(17.4375, 78.4482);
+  static const LatLng _defaultLocation = LatLng(37.7749, -122.4194);
 
   @override
   void initState() {
@@ -325,17 +325,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch the user profile stream. This is the key to fixing the race condition.
     final userProfileAsyncValue = ref.watch(currentUserProfileStreamProvider);
 
-    // Watch the auth state for initial location updates
     ref.listen<AsyncValue<User?>>(authStateProvider, (previous, next) {
       if (next.hasValue && next.value != null) {
         _startLocationUpdatesIfPermitted(next.value);
       }
     });
 
-    // Listen for changes to the user's location to animate the camera.
     ref.listen<AsyncValue<UserProfileModel?>>(
       currentUserProfileStreamProvider,
       (previous, next) {
@@ -348,21 +345,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Campus Map'),
-        leading: Builder(
-          builder:
-              (context) => IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: () => Scaffold.of(context).openDrawer(),
-              ),
-        ),
-      ),
+      extendBodyBehindAppBar: true,
       drawer: const MainDrawer(),
       body: userProfileAsyncValue.when(
         data: (currentUser) {
           if (currentUser == null) {
-            // Show a simple message if the user profile is null
             return const Center(
               child: Text("User profile not found. Please log in again."),
             );
@@ -388,7 +375,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   currentUser.location!.longitude,
                 );
               } else {
-                cameraTarget = _defaultCampusLocation;
+                cameraTarget = _defaultLocation;
               }
 
               return Stack(
@@ -412,13 +399,89 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     ),
                     markers: _markers,
                     myLocationEnabled: _isLocationPermissionGranted,
-                    myLocationButtonEnabled: _isLocationPermissionGranted,
+                    myLocationButtonEnabled: false,
                     zoomControlsEnabled: true,
                   ),
-                  const Positioned(
-                    top: 10,
-                    left: 10,
-                    child: DailyInterestsCounterWidget(),
+                  Positioned(
+                    top: 50,
+                    left: 20,
+                    child: Builder(
+                      builder: (context) {
+                        return FloatingActionButton(
+                          heroTag: 'drawerButton',
+                          onPressed: () => Scaffold.of(context).openDrawer(),
+                          child: const Icon(Icons.menu),
+                          shape:
+                              const CircleBorder(), // Explicitly make it a circle
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    top: 50,
+                    left: 100,
+                    right: 20,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      height: 56, // Standard TextField height
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: TextField(
+                              decoration: InputDecoration(
+                                hintText: 'Search people or interests',
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.search),
+                            onPressed: () {
+                              // TODO: Implement search functionality
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 130,
+                    right: 20,
+                    child: FloatingActionButton(
+                      heroTag: 'locationButton',
+                      onPressed: () {
+                        final userLocation =
+                            ref
+                                .read(currentUserProfileStreamProvider)
+                                .value
+                                ?.location;
+                        _animateCameraToUserLocation(userLocation);
+                      },
+                      child: const Icon(Icons.my_location),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 20,
+                    left: 20,
+                    right: 20,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: DailyInterestsCounterWidget(),
+                    ),
                   ),
                 ],
               );

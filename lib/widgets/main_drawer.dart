@@ -152,7 +152,7 @@ class MainDrawer extends ConsumerWidget {
                           : null,
                   onTap: () {
                     Navigator.of(context).pop();
-                    // context.go('/interests');
+                    context.push('/interests'); // CHANGE: Use context.push()
                   },
                 ),
                 const Divider(height: 32, indent: 16, endIndent: 16),
@@ -170,7 +170,6 @@ class MainDrawer extends ConsumerWidget {
                   context,
                   icon: Icons.logout_rounded,
                   title: 'Logout',
-                  // <--- FIX: Made the callback async and await the dialog
                   onTap: () async {
                     await LogoutDialog.show(context, ref);
                     if (context.mounted) {
