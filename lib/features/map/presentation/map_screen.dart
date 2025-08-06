@@ -23,6 +23,9 @@ import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:near_me/features/map/widgets/daily_interests_counter_widget.dart';
 
+// NEW: Import the LocationService
+import 'package:near_me/services/location_service.dart';
+
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
@@ -39,9 +42,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   late final MapController _mapControllerInstanceForCleanup;
   static const LatLng _defaultLocation = LatLng(37.7749, -122.4194);
-
-  // This is no longer needed here, as the Places client is instantiated inside SearchBarWidget.
-  // final places = GoogleMapsPlaces(apiKey: googleApiKey);
 
   @override
   void initState() {
@@ -102,6 +102,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     _updateLocationStatus(isPermissionGranted: true, message: null);
+    // NEW: After getting permission, recenter the map immediately
+    _goToCurrentLocationAndRecenter();
     _mapControllerInstanceForCleanup.startLocationUpdates(currentUser.uid);
   }
 
@@ -315,11 +317,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
-  // NEW METHOD to handle a selected place from the search bar
   void _onPlaceSelected(Prediction place) async {
-    // You no longer need to instantiate the `places` client here,
-    // so let's move the `getDetailsByPlaceId` call to `SearchBarWidget` as well.
-    // We'll update the `onPlaceSelected` callback to pass the full Place object.
+    // This method is now handled by the SearchBarWidget.
   }
 
   void _animateCameraToUserLocation(GeoPoint? location) {
@@ -336,10 +335,29 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  // New method to handle a place selection, receiving LatLng from SearchBarWidget
   void _handlePlaceSelected(LatLng location) {
     if (_mapController != null) {
       _mapController!.animateCamera(CameraUpdate.newLatLngZoom(location, 19));
+    }
+  }
+
+  // NEW: Method to get the current location and recenter the map
+  Future<void> _goToCurrentLocationAndRecenter() async {
+    try {
+      final position =
+          await ref.read(locationServiceProvider).getCurrentLocation();
+      if (position != null) {
+        _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: LatLng(position.latitude, position.longitude),
+              zoom: 17,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error getting current location: $e");
     }
   }
 
@@ -353,16 +371,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
     });
 
-    ref.listen<AsyncValue<UserProfileModel?>>(
-      currentUserProfileStreamProvider,
-      (previous, next) {
-        if (next.hasValue &&
-            next.value != null &&
-            next.value!.location != null) {
-          _animateCameraToUserLocation(next.value!.location);
-        }
-      },
-    );
+    // REMOVED: This listener is no longer strictly needed for the initial recenter,
+    // as we now handle it explicitly. It can be kept for other updates if desired.
+    // ref.listen<AsyncValue<UserProfileModel?>>(
+    //   currentUserProfileStreamProvider,
+    //   (previous, next) {
+    //     if (next.hasValue &&
+    //         next.value != null &&
+    //         next.value!.location != null) {
+    //       _animateCameraToUserLocation(next.value!.location);
+    //     }
+    //   },
+    // );
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -408,7 +428,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           'assets/map_style.json',
                         );
                         await _mapController?.setMapStyle(jsonString);
-                        _animateCameraToUserLocation(currentUser.location);
+                        // NEW: Recenter the camera on map creation, but only if permission is granted
+                        if (_isLocationPermissionGranted &&
+                            _isLocationServiceEnabled) {
+                          _goToCurrentLocationAndRecenter();
+                        } else {
+                          // Fallback to the default location if no permission
+                          _mapController!.animateCamera(
+                            CameraUpdate.newLatLngZoom(_defaultLocation, 19),
+                          );
+                        }
                       } catch (e) {
                         debugPrint('Failed to load map style: $e');
                       }
@@ -427,11 +456,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     top: 50,
                     left: 20,
                     right: 20,
-                    // Wrap the SearchBarWidget in a Builder
                     child: Builder(
                       builder: (context) {
                         return SearchBarWidget(
-                          // Pass the new context from the Builder
                           scaffoldContext: context,
                           onPlaceSelected: (location) {
                             _handlePlaceSelected(location);
@@ -449,25 +476,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     right: 20,
                     child: FloatingActionButton(
                       heroTag: 'locationButton',
-                      onPressed: () {
-                        final userLocation =
-                            ref
-                                .read(currentUserProfileStreamProvider)
-                                .value
-                                ?.location;
-                        _animateCameraToUserLocation(userLocation);
-                      },
+                      // NEW: Use the explicit recenter method
+                      onPressed: _goToCurrentLocationAndRecenter,
                       child: const Icon(Icons.my_location),
                     ),
                   ),
                   Positioned(
-                    bottom: 20,
+                    top: 130,
                     left: 20,
-                    right: 20,
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: DailyInterestsCounterWidget(),
-                    ),
+                    child: DailyInterestsCounterWidget(),
                   ),
                 ],
               );

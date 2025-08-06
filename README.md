@@ -81,7 +81,7 @@ Delete expired messages from Firestore.
 Alternatively, TTL (Time-To-Live) policies may be used if supported in future updates.
 
 
-### 🌐 Google Places Integration
+### 9 🌐 Google Places Integration
 The search bar at the top of the map screen will be powered by the Google Places API.
 
 Users can type in any location, and real-time suggestions will appear (e.g., cities, landmarks, campuses, etc.).
@@ -97,19 +97,27 @@ The top half will show location suggestions (powered by Google Places).
 
 The bottom half will show user suggestions that match the search query by name.
 
-### 10. Privacy & Location Handling
+### 10📍 Location Control (User Privacy Feature)
+When a user taps on their own profile on the map, a bottom sheet appears. This now includes two important controls:
 
-* Real-time GPS is **not** used continuously to preserve battery and privacy.
-* Location updates are only triggered during key interactions (e.g., map open).
-* All data is opt-in. Users can hide their location or disable it temporarily.
+🟢 Location Sharing Toggle
+A switch allows users to pause or resume automatic location updates.
+
+When turned off, the app stops updating the user’s location every 5 minutes.
+
+When turned back on, the app will instantly update the location and resume the 5-minute interval updates.
+
+🔄 Manual Location Update Button
+A "Update Location Now" button is also provided for manual control.
+
+On tap, the user's location is instantly updated, even if the 5-minute timer hasn't triggered yet.
+
+This is helpful for users who move often and want real-time accuracy.
+
 
 ---
 
 ## 💡 Future Features (Post-MVP)
-
-### 11. Profile Verification
-
-* Link student email (e.g., `@college.edu`) for a badge of authenticity.
 
 ### 12. Event Broadcasting
 

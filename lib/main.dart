@@ -1,6 +1,5 @@
 // file: main.dart
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -16,24 +15,6 @@ import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:near_me/services/notification_service.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 
-Future<void> addLowercaseNamesToAllUsers() async {
-  final usersRef = FirebaseFirestore.instance.collection('users');
-  final allUsers = await usersRef.get();
-  final batch = FirebaseFirestore.instance.batch();
-
-  for (var doc in allUsers.docs) {
-    final data = doc.data();
-    final name = data['name'] as String?;
-
-    if (name != null && data['name_lowercase'] == null) {
-      batch.update(doc.reference, {'name_lowercase': name.toLowerCase()});
-    }
-  }
-
-  await batch.commit();
-  debugPrint('Migration complete! Added name_lowercase to all user profiles.');
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -42,9 +23,6 @@ void main() async {
     androidProvider: AndroidProvider.playIntegrity,
     appleProvider: AppleProvider.appAttest,
   );
-
-  // Call the migration function here once, then remove it
-  await addLowercaseNamesToAllUsers();
 
   runApp(const ProviderScope(child: MyApp()));
 }
