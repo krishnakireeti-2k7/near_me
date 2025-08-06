@@ -128,3 +128,13 @@ final allInterestsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
   }
   return Stream.value([]);
 });
+
+// NEW: Provider to search users by name
+final searchUsersByNameProvider =
+    FutureProvider.family<List<UserProfileModel>, String>((ref, query) {
+      if (query.isEmpty) {
+        return Future.value([]);
+      }
+      final profileRepository = ref.watch(profileRepositoryProvider);
+      return profileRepository.searchUsersByName(query);
+    });

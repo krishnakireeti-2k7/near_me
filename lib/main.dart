@@ -1,5 +1,6 @@
 // file: main.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -13,17 +14,37 @@ import 'package:near_me/firebase_options.dart';
 import 'package:near_me/services/local_interests_service.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:near_me/services/notification_service.dart';
-import 'package:firebase_app_check/firebase_app_check.dart'; // Import App Check
+import 'package:firebase_app_check/firebase_app_check.dart';
+
+Future<void> addLowercaseNamesToAllUsers() async {
+  final usersRef = FirebaseFirestore.instance.collection('users');
+  final allUsers = await usersRef.get();
+  final batch = FirebaseFirestore.instance.batch();
+
+  for (var doc in allUsers.docs) {
+    final data = doc.data();
+    final name = data['name'] as String?;
+
+    if (name != null && data['name_lowercase'] == null) {
+      batch.update(doc.reference, {'name_lowercase': name.toLowerCase()});
+    }
+  }
+
+  await batch.commit();
+  debugPrint('Migration complete! Added name_lowercase to all user profiles.');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Initialize and activate App Check
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.playIntegrity,
     appleProvider: AppleProvider.appAttest,
   );
+
+  // Call the migration function here once, then remove it
+  await addLowercaseNamesToAllUsers();
 
   runApp(const ProviderScope(child: MyApp()));
 }
@@ -58,7 +79,9 @@ class _MyAppState extends ConsumerState<MyApp> {
         if (newProfile != null && newProfile.uid.isNotEmpty) {
           if (_previousTotalInterestsCount == null) {
             _previousTotalInterestsCount = newProfile.totalInterestsCount;
-            print('Initial totalInterestsCount: $_previousTotalInterestsCount');
+            debugPrint(
+              'Initial totalInterestsCount: $_previousTotalInterestsCount',
+            );
           }
 
           if (newProfile.totalInterestsCount >
@@ -78,13 +101,13 @@ class _MyAppState extends ConsumerState<MyApp> {
             await ref
                 .read(localInterestsServiceProvider)
                 .incrementDailyInterestsCount();
-            print('Local daily interests count incremented!');
+            debugPrint('Local daily interests count incremented!');
           }
 
           _previousTotalInterestsCount = newProfile.totalInterestsCount;
         } else if (newProfile == null && _previousTotalInterestsCount != null) {
           _previousTotalInterestsCount = null;
-          print(
+          debugPrint(
             'User logged out or profile became null, resetting previous count.',
           );
         }

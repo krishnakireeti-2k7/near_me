@@ -174,4 +174,24 @@ class ProfileRepository {
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
+
+  // --- NEW METHOD FOR USER SEARCH ---
+  Future<List<UserProfileModel>> searchUsersByName(String query) async {
+    if (query.isEmpty) {
+      return [];
+    }
+
+    final queryLowercase = query.toLowerCase();
+
+    final usersSnapshot =
+        await _firestore
+            .collection('users')
+            .where('name_lowercase', isGreaterThanOrEqualTo: queryLowercase)
+            .where('name_lowercase', isLessThan: queryLowercase + '\uf8ff')
+            .get();
+
+    return usersSnapshot.docs
+        .map((doc) => UserProfileModel.fromMap(doc.data()!))
+        .toList();
+  }
 }

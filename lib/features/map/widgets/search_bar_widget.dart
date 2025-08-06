@@ -2,14 +2,18 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_google_maps_webservices/places.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:near_me/features/profile/model/user_profile_model.dart';
+import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
 // Your Google Places API Key
 const String googleApiKey = 'AIzaSyCmom1vOzH73kkgxgPNMX-F65hSv2LKryI';
 
-class SearchBarWidget extends StatefulWidget {
-  // Now, the callback expects a LatLng
+// Change from StatefulWidget to ConsumerStatefulWidget
+class SearchBarWidget extends ConsumerStatefulWidget {
   final Function(LatLng) onPlaceSelected;
   final Function(String) onUserSearch;
   final BuildContext scaffoldContext;
@@ -22,18 +26,19 @@ class SearchBarWidget extends StatefulWidget {
   });
 
   @override
-  State<SearchBarWidget> createState() => _SearchBarWidgetState();
+  ConsumerState<SearchBarWidget> createState() => _SearchBarWidgetState();
 }
 
-class _SearchBarWidgetState extends State<SearchBarWidget> {
+// Change from State to ConsumerState
+class _SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
   final TextEditingController _searchController = TextEditingController();
   final places = GoogleMapsPlaces(apiKey: googleApiKey);
   final uuid = const Uuid();
 
   String? _sessionToken;
   List<Prediction> _placesSuggestions = [];
-  // You'll add user suggestions here later
-  // List<UserProfileModel> _userSuggestions = [];
+  List<UserProfileModel> _userSuggestions = [];
+  bool _isSearching = false;
 
   @override
   void initState() {
@@ -77,31 +82,66 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
   void _handlePlaceTap(Prediction place) async {
     _searchController.clear();
     setState(() {
+      _isSearching = false;
       _placesSuggestions = [];
+      _userSuggestions = [];
     });
 
-    // Get the place details to extract the coordinates
     final placeDetails = await places.getDetailsByPlaceId(
       place.placeId!,
       sessionToken: _sessionToken,
     );
 
-    // Reset the session token for the next search
     _sessionToken = uuid.v4();
 
     final geometry = placeDetails.result?.geometry;
     if (geometry?.location != null) {
-      // Pass the LatLng to the parent widget
       widget.onPlaceSelected(
         LatLng(geometry!.location.lat, geometry.location.lng),
       );
     }
   }
 
+  void _onSearchChanged(String query) {
+    if (query.isNotEmpty) {
+      setState(() {
+        _isSearching = true;
+      });
+      // Trigger the Google Places search
+      _getPlacesSuggestions(query);
+
+      // Watch the user search provider and get the results
+      ref
+          .read(searchUsersByNameProvider(query).future)
+          .then((users) {
+            setState(() {
+              _userSuggestions = users;
+            });
+          })
+          .catchError((error) {
+            debugPrint('Error searching users: $error');
+            setState(() {
+              _userSuggestions = [];
+            });
+          });
+    } else {
+      setState(() {
+        _isSearching = false;
+        _placesSuggestions = [];
+        _userSuggestions = [];
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // This is the updated build method that combines both place and user results.
+    final hasSuggestions =
+        _placesSuggestions.isNotEmpty || _userSuggestions.isNotEmpty;
+
     return Column(
       children: [
+        // Your search bar UI remains the same.
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           height: 56,
@@ -131,17 +171,16 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(vertical: 16),
                   ),
-                  onChanged: (value) {
-                    _getPlacesSuggestions(value);
-                    widget.onUserSearch(value);
-                  },
+                  onChanged: _onSearchChanged,
                 ),
               ),
               IconButton(icon: const Icon(Icons.search), onPressed: () {}),
             ],
           ),
         ),
-        if (_placesSuggestions.isNotEmpty)
+
+        // Display combined search results.
+        if (hasSuggestions)
           SizedBox(
             height: MediaQuery.of(context).size.height * 0.4,
             child: Container(
@@ -157,18 +196,64 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
                   ),
                 ],
               ),
-              child: ListView.builder(
+              child: ListView(
                 shrinkWrap: true,
                 padding: EdgeInsets.zero,
-                itemCount: _placesSuggestions.length,
-                itemBuilder: (context, index) {
-                  final suggestion = _placesSuggestions[index];
-                  return ListTile(
-                    leading: const Icon(Icons.location_on),
-                    title: Text(suggestion.description ?? ''),
-                    onTap: () => _handlePlaceTap(suggestion),
-                  );
-                },
+                children: [
+                  // Start of Places Section (now first)
+                  if (_placesSuggestions.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Text(
+                        'Places',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    ..._placesSuggestions.map((place) {
+                      return ListTile(
+                        leading: const Icon(Icons.location_on),
+                        title: Text(place.description ?? ''),
+                        onTap: () => _handlePlaceTap(place),
+                      );
+                    }).toList(),
+                  ],
+
+                  // Divider between sections
+                  if (_placesSuggestions.isNotEmpty &&
+                      _userSuggestions.isNotEmpty)
+                    const Divider(),
+
+                  // Start of Users Section (now second)
+                  if (_userSuggestions.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Text(
+                        'Users',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    ..._userSuggestions.map((user) {
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage:
+                              user.profileImageUrl.isNotEmpty
+                                  ? NetworkImage(user.profileImageUrl)
+                                  : null,
+                          child:
+                              user.profileImageUrl.isEmpty
+                                  ? const Icon(Icons.person)
+                                  : null,
+                        ),
+                        title: Text(user.name),
+                        subtitle: Text(user.shortBio),
+                        onTap: () {
+                          // Navigate to the user's profile using the UID
+                          context.push('/profile/${user.uid}');
+                        },
+                      );
+                    }).toList(),
+                  ],
+                ],
               ),
             ),
           ),

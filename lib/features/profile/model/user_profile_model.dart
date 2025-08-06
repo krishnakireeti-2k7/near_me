@@ -1,10 +1,12 @@
 // file: lib/features/profile/model/user_profile_model.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart'; // Add this import for `@required` if you use it
 
 class UserProfileModel {
   final String uid;
   final String name;
+  final String? nameLowercase; // New field for case-insensitive search
   final List<String> tags;
   final String profileImageUrl;
   final Map<String, String> socialHandles;
@@ -12,11 +14,12 @@ class UserProfileModel {
   final String shortBio;
   final Timestamp? lastActive;
   final String? fcmToken;
-  final int totalInterestsCount; // Keep this for all-time count
+  final int totalInterestsCount;
 
   UserProfileModel({
     required this.uid,
     required this.name,
+    this.nameLowercase, // New parameter
     required this.tags,
     required this.profileImageUrl,
     required this.socialHandles,
@@ -24,13 +27,15 @@ class UserProfileModel {
     required this.shortBio,
     this.lastActive,
     this.fcmToken,
-    this.totalInterestsCount = 0, // Default for total count
+    this.totalInterestsCount = 0,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'uid': uid,
       'name': name,
+      'name_lowercase':
+          name.toLowerCase(), // Automatically save the lowercase version
       'tags': tags,
       'profileImageUrl': profileImageUrl,
       'socialHandles': socialHandles,
@@ -46,6 +51,7 @@ class UserProfileModel {
     return UserProfileModel(
       uid: map['uid'] as String,
       name: map['name'] as String,
+      nameLowercase: map['name_lowercase'] as String?, // Retrieve the new field
       tags: map['tags'] != null ? List<String>.from(map['tags']) : [],
       profileImageUrl: map['profileImageUrl'] as String,
       socialHandles:
@@ -64,6 +70,7 @@ class UserProfileModel {
     return UserProfileModel(
       uid: '',
       name: '',
+      nameLowercase: '', // Provide a default value
       tags: [],
       profileImageUrl: '',
       socialHandles: {},
@@ -78,6 +85,7 @@ class UserProfileModel {
   UserProfileModel copyWith({
     String? uid,
     String? name,
+    String? nameLowercase,
     List<String>? tags,
     String? profileImageUrl,
     Map<String, String>? socialHandles,
@@ -90,6 +98,7 @@ class UserProfileModel {
     return UserProfileModel(
       uid: uid ?? this.uid,
       name: name ?? this.name,
+      nameLowercase: nameLowercase ?? this.nameLowercase,
       tags: tags ?? this.tags,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       socialHandles: socialHandles ?? this.socialHandles,
