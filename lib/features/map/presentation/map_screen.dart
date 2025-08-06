@@ -40,13 +40,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   late final MapController _mapControllerInstanceForCleanup;
   static const LatLng _defaultLocation = LatLng(37.7749, -122.4194);
 
-  // NEW: Places API client
-  final places = GoogleMapsPlaces(apiKey: googleApiKey);
+  // This is no longer needed here, as the Places client is instantiated inside SearchBarWidget.
+  // final places = GoogleMapsPlaces(apiKey: googleApiKey);
 
   @override
   void initState() {
     super.initState();
     _mapControllerInstanceForCleanup = ref.read(mapControllerProvider);
+    _startLocationUpdatesIfPermitted(ref.read(authStateProvider).value);
   }
 
   @override
@@ -316,22 +317,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   // NEW METHOD to handle a selected place from the search bar
   void _onPlaceSelected(Prediction place) async {
-    if (_mapController == null) return;
-
-    // We need to get the place details to animate the camera.
-    // The details API call is needed to get the exact lat/lng of the place
-    final placeDetails = await places.getDetailsByPlaceId(place.placeId!);
-    final geometry = placeDetails.result?.geometry;
-
-    if (geometry?.location != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          LatLng(geometry!.location.lat, geometry.location.lng),
-          19,
-        ),
-      );
-      // TODO: Here, you would also filter your user list to show users near this location
-    }
+    // You no longer need to instantiate the `places` client here,
+    // so let's move the `getDetailsByPlaceId` call to `SearchBarWidget` as well.
+    // We'll update the `onPlaceSelected` callback to pass the full Place object.
   }
 
   void _animateCameraToUserLocation(GeoPoint? location) {
@@ -345,6 +333,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           19,
         ),
       );
+    }
+  }
+
+  // New method to handle a place selection, receiving LatLng from SearchBarWidget
+  void _handlePlaceSelected(LatLng location) {
+    if (_mapController != null) {
+      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(location, 19));
     }
   }
 
@@ -427,33 +422,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     myLocationButtonEnabled: false,
                     zoomControlsEnabled: true,
                   ),
+
                   Positioned(
                     top: 50,
                     left: 20,
+                    right: 20,
+                    // Wrap the SearchBarWidget in a Builder
                     child: Builder(
                       builder: (context) {
-                        return FloatingActionButton(
-                          heroTag: 'drawerButton',
-                          onPressed: () => Scaffold.of(context).openDrawer(),
-                          child: const Icon(Icons.menu),
-                          shape:
-                              const CircleBorder(), // Explicitly make it a circle
+                        return SearchBarWidget(
+                          // Pass the new context from the Builder
+                          scaffoldContext: context,
+                          onPlaceSelected: (location) {
+                            _handlePlaceSelected(location);
+                          },
+                          onUserSearch: (query) {
+                            // TODO: Implement user search logic here.
+                          },
                         );
                       },
                     ),
                   ),
-                  // UPDATED: Replaced the old search bar with the new widget
-                  Positioned(
-                    top: 50,
-                    left: 100,
-                    right: 20,
-                    child: SearchBarWidget(
-                      onPlaceSelected: _onPlaceSelected,
-                      onUserSearch: (query) {
-                        // TODO: Implement user search logic here.
-                      },
-                    ),
-                  ),
+
                   Positioned(
                     top: 130,
                     right: 20,

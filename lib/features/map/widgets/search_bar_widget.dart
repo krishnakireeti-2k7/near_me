@@ -2,20 +2,23 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_google_maps_webservices/places.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:uuid/uuid.dart';
 
-// Your Google Maps API Key
+// Your Google Places API Key
 const String googleApiKey = 'AIzaSyCmom1vOzH73kkgxgPNMX-F65hSv2LKryI';
 
 class SearchBarWidget extends StatefulWidget {
-  // A callback function to notify the parent widget when a place is selected.
-  final Function(Prediction) onPlaceSelected;
+  // Now, the callback expects a LatLng
+  final Function(LatLng) onPlaceSelected;
   final Function(String) onUserSearch;
+  final BuildContext scaffoldContext;
 
   const SearchBarWidget({
     super.key,
     required this.onPlaceSelected,
     required this.onUserSearch,
+    required this.scaffoldContext,
   });
 
   @override
@@ -52,7 +55,6 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
       return;
     }
 
-    // Reset session token for a new search
     if (_sessionToken == null) {
       _sessionToken = uuid.v4();
     }
@@ -73,67 +75,76 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
   }
 
   void _handlePlaceTap(Prediction place) async {
-    // We'll reset the session token and clear the suggestions after a selection.
-    _sessionToken = null;
     _searchController.clear();
     setState(() {
       _placesSuggestions = [];
     });
-    // Call the parent's callback with the selected place.
-    widget.onPlaceSelected(place);
+
+    // Get the place details to extract the coordinates
+    final placeDetails = await places.getDetailsByPlaceId(
+      place.placeId!,
+      sessionToken: _sessionToken,
+    );
+
+    // Reset the session token for the next search
+    _sessionToken = uuid.v4();
+
+    final geometry = placeDetails.result?.geometry;
+    if (geometry?.location != null) {
+      // Pass the LatLng to the parent widget
+      widget.onPlaceSelected(
+        LatLng(geometry!.location.lat, geometry.location.lng),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      top: 50,
-      left: 100,
-      right: 20,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            height: 56,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: const InputDecoration(
-                      hintText: 'Search for places or users...',
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    onChanged: (value) {
-                      _getPlacesSuggestions(value);
-                      // This will be for user search later.
-                      widget.onUserSearch(value);
-                    },
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          height: 56,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed:
+                    () => Scaffold.of(widget.scaffoldContext).openDrawer(),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Search for places or users...',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 16),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  onPressed: () {
-                    // This can be used for a direct search submission
-                    // without needing to tap a suggestion.
+                  onChanged: (value) {
+                    _getPlacesSuggestions(value);
+                    widget.onUserSearch(value);
                   },
                 ),
-              ],
-            ),
+              ),
+              IconButton(icon: const Icon(Icons.search), onPressed: () {}),
+            ],
           ),
-          if (_placesSuggestions.isNotEmpty)
-            Container(
+        ),
+        if (_placesSuggestions.isNotEmpty)
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.4,
+            child: Container(
               margin: const EdgeInsets.only(top: 8),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
@@ -160,8 +171,8 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
                 },
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
