@@ -215,8 +215,6 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
           ),
         ),
 
-        // This section is only for the map screen and not for the search results screen
-        // The condition has been simplified to fix the logical flaw
         if (hasSuggestions && widget.onSearchToggled != null)
           SizedBox(
             height: MediaQuery.of(context).size.height * 0.4,
@@ -233,68 +231,67 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
                   ),
                 ],
               ),
-              child: Column(
+              child: ListView(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
                 children: [
-                  Expanded(
-                    child: ListView(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      children: [
-                        if (_placesSuggestions.isNotEmpty) ...[
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-                            child: Text(
-                              'Places',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          ..._placesSuggestions.map((place) {
-                            return ListTile(
-                              leading: const Icon(Icons.location_on),
-                              title: Text(place.description ?? ''),
-                              onTap: () => _handlePlaceTap(place),
-                            );
-                          }).toList(),
-                        ],
-                        if (_placesSuggestions.isNotEmpty &&
-                            _userSuggestions.isNotEmpty)
-                          const Divider(),
-                        if (_userSuggestions.isNotEmpty) ...[
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-                            child: Text(
-                              'Users',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          ..._userSuggestions.map((user) {
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundImage:
-                                    user.profileImageUrl.isNotEmpty
-                                        ? NetworkImage(user.profileImageUrl)
-                                        : null,
-                                child:
-                                    user.profileImageUrl.isEmpty
-                                        ? const Icon(Icons.person)
-                                        : null,
-                              ),
-                              title: Text(user.name),
-                              subtitle: Text(user.shortBio),
-                              onTap: () => context.push('/profile/${user.uid}'),
-                            );
-                          }).toList(),
-                        ],
-                      ],
+                  if (_placesSuggestions.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Text(
+                        'Places',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 8.0,
+                    ..._placesSuggestions.map((place) {
+                      return ListTile(
+                        leading: const Icon(Icons.location_on),
+                        title: Text(place.description ?? ''),
+                        onTap: () => _handlePlaceTap(place),
+                      );
+                    }).toList(),
+                  ],
+                  if (_placesSuggestions.isNotEmpty &&
+                      _userSuggestions.isNotEmpty)
+                    const Divider(),
+                  if (_userSuggestions.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Text(
+                        'Users',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    child: ElevatedButton(
-                      onPressed: () {
+                    ..._userSuggestions.map((user) {
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage:
+                              user.profileImageUrl.isNotEmpty
+                                  ? NetworkImage(user.profileImageUrl)
+                                  : null,
+                          child:
+                              user.profileImageUrl.isEmpty
+                                  ? const Icon(Icons.person)
+                                  : null,
+                        ),
+                        title: Text(user.name),
+                        subtitle: Text(user.shortBio),
+                        onTap: () => context.push('/profile/${user.uid}'),
+                      );
+                    }).toList(),
+                  ],
+                  // Corrected: The View All button is now a ListTile inside the ListView
+                  if (_searchController.text.isNotEmpty)
+                    ListTile(
+                      title: const Text(
+                        'View All Results',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                      onTap: () {
                         context.push(
                           '/searchResults',
                           extra: {
@@ -304,15 +301,7 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
                           },
                         );
                       },
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(40),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                      ),
-                      child: const Text('View All Results'),
                     ),
-                  ),
                 ],
               ),
             ),
