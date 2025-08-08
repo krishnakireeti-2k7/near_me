@@ -15,7 +15,6 @@ class ProfileRepository {
   }) : _firestore = firestore,
        _auth = auth;
 
-  // The rest of your methods...
   Future<void> createOrUpdateProfile(UserProfileModel profile) async {
     await _firestore
         .collection('users')
@@ -23,7 +22,6 @@ class ProfileRepository {
         .set(profile.toMap(), SetOptions(merge: true));
   }
 
-  // Get profile of any user using UID
   Future<UserProfileModel?> getUserProfile(String uid) async {
     final doc = await _firestore.collection('users').doc(uid).get();
     if (doc.exists) {
@@ -32,7 +30,6 @@ class ProfileRepository {
     return null;
   }
 
-  // Get profile of currently logged-in user
   Future<UserProfileModel?> getCurrentUserProfile() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;
@@ -44,7 +41,6 @@ class ProfileRepository {
     return null;
   }
 
-  // New method to save an 'interested' action
   Future<void> saveInterest(String fromUserId, String toUserId) async {
     final lastInterest =
         await _firestore
@@ -72,7 +68,6 @@ class ProfileRepository {
     await incrementInterestedCount(toUserId);
   }
 
-  // NEW METHOD: Increment the 'interestedCount' field for a user
   Future<void> incrementInterestedCount(String userId) async {
     try {
       await _firestore.collection('users').doc(userId).update({
@@ -87,7 +82,6 @@ class ProfileRepository {
     }
   }
 
-  // NEW: Update user's location in Firestore
   Future<void> updateUserLocation(String userId, GeoPoint location) async {
     try {
       await _firestore.collection('users').doc(userId).update({
@@ -100,7 +94,6 @@ class ProfileRepository {
     }
   }
 
-  // NEW METHOD: To update a single field in a user's profile
   Future<void> updateUserProfileField({
     required String uid,
     required String field,
@@ -114,7 +107,7 @@ class ProfileRepository {
     }
   }
 
-  // Stream to get all user profiles for map
+  // Stream for all user profiles for map
   Stream<List<UserProfileModel>> getAllUserProfilesStream() {
     return _firestore.collection('users').orderBy('uid').snapshots().map((
       snapshot,
@@ -125,7 +118,6 @@ class ProfileRepository {
     });
   }
 
-  // --- NEW METHOD: Stream a single user's profile ---
   Stream<UserProfileModel> streamUserProfile(String uid) {
     return _firestore.collection('users').doc(uid).snapshots().map((snapshot) {
       if (snapshot.exists && snapshot.data() != null) {
@@ -135,10 +127,6 @@ class ProfileRepository {
     });
   }
 
-  // ----------------------------------------------------
-  // UPDATED: METHODS FOR THE DAILY/ALL-TIME INTERESTS
-  // ----------------------------------------------------
-
   Stream<QuerySnapshot> getAllInterestsStream(String userId) {
     return _firestore
         .collection('interests')
@@ -147,7 +135,6 @@ class ProfileRepository {
         .snapshots();
   }
 
-  // NEW METHOD: To delete a specific interest document
   Future<void> deleteInterest(String documentId) async {
     try {
       await _firestore.collection('interests').doc(documentId).delete();
@@ -175,7 +162,6 @@ class ProfileRepository {
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
 
-  // --- NEW METHOD FOR USER SEARCH ---
   Future<List<UserProfileModel>> searchUsersByName(String query) async {
     if (query.isEmpty) {
       return [];
@@ -193,5 +179,15 @@ class ProfileRepository {
     return usersSnapshot.docs
         .map((doc) => UserProfileModel.fromMap(doc.data()!))
         .toList();
+  }
+
+  // NEW METHOD: This is the fix for your error
+  Future<void> updateGhostModeStatus(
+    String userId,
+    bool isGhostModeEnabled,
+  ) async {
+    await _firestore.collection('users').doc(userId).update({
+      'isGhostModeEnabled': isGhostModeEnabled,
+    });
   }
 }

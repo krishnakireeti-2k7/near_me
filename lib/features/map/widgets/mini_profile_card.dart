@@ -237,6 +237,27 @@ class MiniProfileCard extends ConsumerWidget {
                   },
                 ),
                 const SizedBox(height: 10),
+                Consumer(
+                  builder: (context, ref, child) {
+                    final isGhostModeEnabled =
+                        ref.watch(mapLocationProvider).isGhostModeEnabled;
+                    return ThemedSwitchListTile(
+                      title: 'Ghost Mode',
+                      subtitle:
+                          isGhostModeEnabled
+                              ? 'Your pin is hidden from everyone.'
+                              : 'Your pin is visible to everyone.',
+                      value: isGhostModeEnabled,
+                      onChanged: (value) {
+                        ref
+                            .read(mapLocationProvider.notifier)
+                            .toggleGhostMode(value);
+                      },
+                      icon: Icons.visibility_off,
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
                   child: DecoratedBox(
@@ -245,7 +266,6 @@ class MiniProfileCard extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: ElevatedButton(
-                      // UPDATED: This button now checks the result of the updateLocationNow() call
                       onPressed: () async {
                         final success =
                             await ref
@@ -259,7 +279,6 @@ class MiniProfileCard extends ConsumerWidget {
                             backgroundColor: Colors.green,
                           );
                         } else {
-                          // Show a different message if permission was denied
                           showFloatingSnackBar(
                             context,
                             'Location permission denied. Please enable it in settings.',

@@ -31,21 +31,29 @@ final googleMapControllerProvider =
       return GoogleMapControllerNotifier();
     });
 
-// NEW: State class to hold the location sharing status
+// UPDATED: State class with ghost mode status
 class MapLocationState {
   final bool isLocationSharingEnabled;
+  final bool isGhostModeEnabled;
 
-  MapLocationState({this.isLocationSharingEnabled = true});
+  MapLocationState({
+    this.isLocationSharingEnabled = true,
+    this.isGhostModeEnabled = false,
+  });
 
-  MapLocationState copyWith({bool? isLocationSharingEnabled}) {
+  MapLocationState copyWith({
+    bool? isLocationSharingEnabled,
+    bool? isGhostModeEnabled,
+  }) {
     return MapLocationState(
       isLocationSharingEnabled:
           isLocationSharingEnabled ?? this.isLocationSharingEnabled,
+      isGhostModeEnabled: isGhostModeEnabled ?? this.isGhostModeEnabled,
     );
   }
 }
 
-// NEW: The MapLocationNotifier will handle the location logic.
+// UPDATED: The MapLocationNotifier with ghost mode logic
 class MapLocationNotifier extends StateNotifier<MapLocationState> {
   final ProfileRepository _profileRepository;
   Timer? _locationUpdateTimer;
@@ -59,7 +67,6 @@ class MapLocationNotifier extends StateNotifier<MapLocationState> {
     _currentUserId = userId;
   }
 
-  // NEW METHOD: Toggle location sharing
   void toggleLocationSharing(bool isEnabled) {
     if (_currentUserId == null) return;
     state = state.copyWith(isLocationSharingEnabled: isEnabled);
@@ -70,17 +77,23 @@ class MapLocationNotifier extends StateNotifier<MapLocationState> {
     }
   }
 
-  // UPDATED METHOD: Manual location update with permission check
+  // NEW METHOD: Toggle Ghost Mode
+  void toggleGhostMode(bool isEnabled) {
+    state = state.copyWith(isGhostModeEnabled: isEnabled);
+    if (_currentUserId != null) {
+      _profileRepository.updateGhostModeStatus(_currentUserId!, isEnabled);
+    }
+  }
+
   Future<bool> updateLocationNow() async {
     if (_currentUserId == null) return false;
 
-    // Check for permission first
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        return false; // Permission denied, cannot update location
+        return false;
       }
     }
 
@@ -90,21 +103,19 @@ class MapLocationNotifier extends StateNotifier<MapLocationState> {
       );
       final newLocation = GeoPoint(position.latitude, position.longitude);
       await _profileRepository.updateUserLocation(_currentUserId!, newLocation);
-      return true; // Location updated successfully
+      return true;
     } catch (e) {
       debugPrint('Failed to get or update location: $e');
-      return false; // An error occurred
+      return false;
     }
   }
 
-  // CORRECTED: This method was missing before. It stops the timer and resets the state for a clean logout.
   void signOutCleanup() {
     _stopLocationUpdates();
     _currentUserId = null;
     state = state.copyWith(isLocationSharingEnabled: false);
   }
 
-  // The existing logic is now encapsulated here.
   void _startLocationUpdates(String userId) {
     _locationUpdateTimer?.cancel();
     _locationUpdateTimer = Timer.periodic(const Duration(minutes: 5), (_) {
@@ -136,7 +147,6 @@ class MapLocationNotifier extends StateNotifier<MapLocationState> {
   }
 }
 
-// NEW: This provider exposes the MapLocationNotifier
 final mapLocationProvider =
     StateNotifierProvider<MapLocationNotifier, MapLocationState>((ref) {
       final profileRepository = ref.read(profileRepositoryProvider);

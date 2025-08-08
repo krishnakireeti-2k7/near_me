@@ -153,6 +153,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final currentUserId = ref.read(authStateProvider).value?.uid;
 
     for (final user in users) {
+      // NEW LOGIC: Skip marker creation for the current user in ghost mode
+      if (user.uid == currentUserId && user.isGhostModeEnabled) {
+        continue;
+      }
+
       if (user.location != null &&
           user.location!.latitude != 0 &&
           user.location!.longitude != 0) {
