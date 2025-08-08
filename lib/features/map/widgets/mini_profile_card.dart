@@ -11,6 +11,7 @@ import 'package:near_me/features/map/widgets/mini_profile_header.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/services/local_interests_service.dart';
+import 'package:near_me/widgets/themed_switch_list_tile.dart'; // Import the new widget
 
 // Maximum daily interests allowed
 const int maxDailyInterests = 10;
@@ -214,39 +215,26 @@ class MiniProfileCard extends ConsumerWidget {
           if (isCurrentUser)
             Column(
               children: [
-                const Divider(),
-                Card(
-                  color: Theme.of(context).cardColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.0),
-                  ),
-                  child: Consumer(
-                    builder: (context, ref, child) {
-                      final isSharingLocation =
-                          ref
-                              .watch(mapLocationProvider)
-                              .isLocationSharingEnabled;
-                      return SwitchListTile(
-                        title: const Text('Share My Location'),
-                        subtitle:
-                            isSharingLocation
-                                ? const Text(
-                                  'Your location is updating automatically.',
-                                )
-                                : const Text('Your location is paused.'),
-                        value: isSharingLocation,
-                        onChanged: (value) {
-                          ref
-                              .read(mapLocationProvider.notifier)
-                              .toggleLocationSharing(value);
-                        },
-                        activeColor: Colors.white,
-                        activeTrackColor: const Color(0xFFff6b6b),
-                        inactiveThumbColor: Colors.grey.shade300,
-                        inactiveTrackColor: Colors.grey.shade700,
-                      );
-                    },
-                  ),
+                const SizedBox(height: 10),
+                Consumer(
+                  builder: (context, ref, child) {
+                    final isSharingLocation =
+                        ref.watch(mapLocationProvider).isLocationSharingEnabled;
+                    return ThemedSwitchListTile(
+                      title: 'Share My Location',
+                      subtitle:
+                          isSharingLocation
+                              ? 'Your location is updating automatically.'
+                              : 'Your location is paused.',
+                      value: isSharingLocation,
+                      onChanged: (value) {
+                        ref
+                            .read(mapLocationProvider.notifier)
+                            .toggleLocationSharing(value);
+                      },
+                      icon: Icons.location_on,
+                    );
+                  },
                 ),
                 const SizedBox(height: 10),
                 SizedBox(
