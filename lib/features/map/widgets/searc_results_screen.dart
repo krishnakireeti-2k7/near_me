@@ -4,88 +4,204 @@ import 'package:flutter/material.dart';
 import 'package:flutter_google_maps_webservices/places.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:near_me/features/map/widgets/search_bar_widget.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:near_me/features/map/controller/map_controller.dart'; // Make sure this path is correct
-
-// Your Google Places API Key
+import 'package:near_me/features/map/controller/map_controller.dart';
 const String googleApiKey = 'AIzaSyCmom1vOzH73kkgxgPNMX-F65hSv2LKryI';
 
-class SearchResultsScreen extends ConsumerWidget {
+class SearchResultsScreen extends ConsumerStatefulWidget {
   final List<Prediction> places;
   final List<UserProfileModel> users;
+  final String initialQuery;
 
   const SearchResultsScreen({
     Key? key,
     required this.places,
     required this.users,
+    required this.initialQuery,
   }) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Search Results'),
-          bottom: const TabBar(tabs: [Tab(text: 'Places'), Tab(text: 'Users')]),
-        ),
-        body: TabBarView(
-          children: [
-            // Places Tab
-            ListView.builder(
-              itemCount: places.length,
-              itemBuilder: (context, index) {
-                final prediction = places[index];
-                return ListTile(
-                  leading: const Icon(Icons.place),
-                  title: Text(prediction.description ?? 'No Description'),
-                  onTap: () async {
-                    // Use Places API to fetch LatLng before popping back
-                    final placesApi = GoogleMapsPlaces(apiKey: googleApiKey);
-                    final details = await placesApi.getDetailsByPlaceId(
-                      prediction.placeId!,
-                    );
-                    final location = details.result.geometry?.location;
-                    if (location != null) {
-                      // Correctly use the updated provider name
-                      ref
-                          .read(googleMapControllerProvider.notifier)
-                          .moveCamera(LatLng(location.lat, location.lng));
-                      GoRouter.of(context).pop();
-                    }
-                  },
-                );
-              },
-            ),
+  ConsumerState<SearchResultsScreen> createState() =>
+      _SearchResultsScreenState();
+}
 
-            // Users Tab
-            ListView.builder(
-              itemCount: users.length,
-              itemBuilder: (context, index) {
-                final user = users[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage:
-                        user.profileImageUrl.isNotEmpty
-                            ? NetworkImage(user.profileImageUrl)
-                            : null,
-                    child:
-                        user.profileImageUrl.isEmpty
-                            ? const Icon(Icons.person)
-                            : null,
+class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
+  late List<Prediction> _places;
+  late List<UserProfileModel> _users;
+  int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _places = widget.places;
+    _users = widget.users;
+  }
+
+  void _onSearchUpdate(List<Prediction> places, List<UserProfileModel> users) {
+    setState(() {
+      _places = places;
+      _users = users;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 50.0, left: 16.0, right: 16.0),
+            child: Row(
+              children: [
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SearchBarWidget(
+                    initialQuery: widget.initialQuery,
+                    autoFocus: true,
+                    showDrawerButton:
+                        false, // Prevents a redundant back button in the SearchBarWidget
+                    onSearchUpdate: _onSearchUpdate,
                   ),
-                  title: Text(user.name),
-                  onTap: () {
-                    // Navigate to the user's profile using the UID
-                    context.push('/profile/${user.uid}');
-                  },
-                );
-              },
+                ),
+              ],
             ),
-          ],
+          ),
+
+          // This single Padding now controls the spacing for the toggle buttons.
+          // 'top: 24.0' creates a large gap from the search bar.
+          // 'bottom: 8.0' creates a small, clean gap to the search results.
+          Padding(
+            padding: const EdgeInsets.only(left: 16.0, top: 24.0, bottom: 8.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(20),
+              ),
+              // The internal vertical padding is kept at 4.0 to make the buttons look correct.
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildToggleButton('Places', 0),
+                  const SizedBox(width: 6),
+                  _buildToggleButton('Users', 1),
+                ],
+              ),
+            ),
+          ),
+
+          Expanded(
+            child:
+                _selectedIndex == 0
+                    ? _buildResultsList(
+                      context,
+                      _places,
+                      (prediction) async {
+                        final placesApi = GoogleMapsPlaces(
+                          apiKey: googleApiKey,
+                        );
+                        final details = await placesApi.getDetailsByPlaceId(
+                          prediction.placeId!,
+                        );
+                        final location = details.result.geometry?.location;
+                        if (location != null) {
+                          ref
+                              .read(googleMapControllerProvider.notifier)
+                              .moveCamera(LatLng(location.lat, location.lng));
+                          GoRouter.of(context).pop();
+                        }
+                      },
+                      (prediction) => ListTile(
+                        leading: const Icon(
+                          Icons.place,
+                          color: Colors.blueAccent,
+                        ),
+                        title: Text(prediction.description ?? 'No Description'),
+                      ),
+                    )
+                    : _buildResultsList(
+                      context,
+                      _users,
+                      (user) {
+                        context.push('/profile/${user.uid}');
+                      },
+                      (user) => ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage:
+                              user.profileImageUrl.isNotEmpty
+                                  ? NetworkImage(user.profileImageUrl)
+                                  : null,
+                          child:
+                              user.profileImageUrl.isEmpty
+                                  ? const Icon(Icons.person)
+                                  : null,
+                        ),
+                        title: Text(user.name),
+                        subtitle: Text(
+                          user.shortBio.isNotEmpty
+                              ? user.shortBio
+                              : 'No bio available',
+                        ),
+                      ),
+                    ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleButton(String label, int index) {
+    final bool isSelected = _selectedIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedIndex = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.grey[200],
+          borderRadius: BorderRadius.circular(16),
+          boxShadow:
+              isSelected
+                  ? [BoxShadow(color: Colors.black12, blurRadius: 4)]
+                  : [],
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.black : Colors.grey[600],
+            fontWeight: FontWeight.w500,
+            fontSize: 13,
+          ),
         ),
       ),
     );
   }
-}
+
+  Widget _buildResultsList<T>(
+    BuildContext context,
+    List<T> items,
+    Function(T) onTap,
+    Widget Function(T) builder,
+  ) {
+    if (items.isEmpty) {
+      return const Center(
+        child: Text(
+          'No results found.',
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder:
+          (context, index) =>
+              const Divider(height: 1, indent: 16, endIndent: 16),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return InkWell(onTap: () => onTap(item), child: builder(item));
+      },
+    );
+  }
+} 

@@ -9,21 +9,29 @@ import 'package:uuid/uuid.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
+
 const String googleApiKey = 'AIzaSyCmom1vOzH73kkgxgPNMX-F65hSv2LKryI';
 
 class SearchBarWidget extends ConsumerStatefulWidget {
-  final Function(LatLng) onPlaceSelected;
-  final Function(String) onUserSearch;
-  final BuildContext scaffoldContext;
-  // NEW: Add the onSearchToggled callback
+  final Function(LatLng)? onPlaceSelected;
+  final Function(String)? onUserSearch;
+  final BuildContext? scaffoldContext;
   final Function(bool)? onSearchToggled;
+  final String? initialQuery;
+  final bool autoFocus;
+  final bool showDrawerButton;
+  final Function(List<Prediction>, List<UserProfileModel>)? onSearchUpdate;
 
   const SearchBarWidget({
     super.key,
-    required this.onPlaceSelected,
-    required this.onUserSearch,
-    required this.scaffoldContext,
+    this.onPlaceSelected,
+    this.onUserSearch,
+    this.scaffoldContext,
     this.onSearchToggled,
+    this.initialQuery,
+    this.autoFocus = false,
+    this.showDrawerButton = true,
+    this.onSearchUpdate,
   });
 
   @override
@@ -38,18 +46,11 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
   String? _sessionToken;
   List<Prediction> _placesSuggestions = [];
   List<UserProfileModel> _userSuggestions = [];
-  bool _isSearching = false;
 
   void clearSuggestions() {
     if (mounted) {
-      setState(() {
-        _isSearching = false;
-        _placesSuggestions = [];
-        _userSuggestions = [];
-        _searchController.clear();
-      });
+      _searchController.clear();
       FocusManager.instance.primaryFocus?.unfocus();
-      // NEW: Call the callback to notify the parent
       widget.onSearchToggled?.call(false);
     }
   }
@@ -58,14 +59,15 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
   void initState() {
     super.initState();
     _sessionToken = uuid.v4();
+    if (widget.initialQuery != null) {
+      _searchController.text = widget.initialQuery!;
+    }
     _searchController.addListener(() {
-      final isSearchingNow = _searchController.text.isNotEmpty;
-      if (isSearchingNow != _isSearching) {
-        _isSearching = isSearchingNow;
-        // NEW: Call the callback when the search state changes
-        widget.onSearchToggled?.call(isSearchingNow);
+      final query = _searchController.text;
+      if (widget.onSearchToggled != null) {
+        widget.onSearchToggled!(query.isNotEmpty);
       }
-      _onSearchChanged(_searchController.text);
+      _onSearchChanged(query);
     });
   }
 
@@ -95,7 +97,11 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
 
     if (res.isOkay) {
       if (mounted) {
-        setState(() => _placesSuggestions = res.predictions!);
+        setState(() {
+          _placesSuggestions = res.predictions!;
+          // Call the update callback to notify the parent
+          widget.onSearchUpdate?.call(_placesSuggestions, _userSuggestions);
+        });
       }
     } else {
       debugPrint('Google Places API Error: ${res.errorMessage}');
@@ -104,13 +110,6 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
 
   void _handlePlaceTap(Prediction place) async {
     _searchController.clear();
-    if (mounted) {
-      setState(() {
-        _isSearching = false;
-        _placesSuggestions = [];
-        _userSuggestions = [];
-      });
-    }
     FocusManager.instance.primaryFocus?.unfocus();
     widget.onSearchToggled?.call(false);
 
@@ -118,12 +117,11 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
       place.placeId!,
       sessionToken: _sessionToken,
     );
-
     _sessionToken = uuid.v4();
 
     final geometry = placeDetails.result?.geometry;
     if (geometry?.location != null) {
-      widget.onPlaceSelected(
+      widget.onPlaceSelected?.call(
         LatLng(geometry!.location.lat, geometry.location.lng),
       );
     }
@@ -131,32 +129,39 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
 
   void _onSearchChanged(String query) {
     if (query.isNotEmpty) {
-      setState(() {
-        _isSearching = true;
-      });
       _getPlacesSuggestions(query);
-
       ref
           .read(searchUsersByNameProvider(query).future)
           .then((users) {
             if (mounted) {
-              setState(() => _userSuggestions = users);
+              setState(() {
+                _userSuggestions = users;
+                // Call the update callback to notify the parent
+                widget.onSearchUpdate?.call(
+                  _placesSuggestions,
+                  _userSuggestions,
+                );
+              });
             }
           })
           .catchError((error) {
             debugPrint('Error searching users: $error');
             if (mounted) {
               setState(() => _userSuggestions = []);
+              // Call the update callback on error as well
+              widget.onSearchUpdate?.call(_placesSuggestions, _userSuggestions);
             }
           });
     } else {
-      setState(() {
-        _isSearching = false;
-        _placesSuggestions = [];
-        _userSuggestions = [];
-      });
+      if (mounted) {
+        setState(() {
+          _placesSuggestions = [];
+          _userSuggestions = [];
+          // Call the update callback for empty query
+          widget.onSearchUpdate?.call(_placesSuggestions, _userSuggestions);
+        });
+      }
     }
-    // No need to call onSearchToggled here anymore, as it's handled in the listener.
   }
 
   @override
@@ -182,27 +187,37 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
           ),
           child: Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed:
-                    () => Scaffold.of(widget.scaffoldContext).openDrawer(),
-              ),
+              if (widget.showDrawerButton && widget.scaffoldContext != null)
+                IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed:
+                      () => Scaffold.of(widget.scaffoldContext!).openDrawer(),
+                ),
+              if (!widget
+                  .showDrawerButton) // Show back button on results screen
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
               Expanded(
                 child: TextField(
                   controller: _searchController,
+                  autofocus: widget.autoFocus,
                   decoration: const InputDecoration(
                     hintText: 'Search for places or users...',
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(vertical: 16),
                   ),
-                  // The onChanged is still needed for filtering, but onSearchToggled is handled by the listener
                 ),
               ),
               IconButton(icon: const Icon(Icons.search), onPressed: () {}),
             ],
           ),
         ),
-        if (hasSuggestions)
+
+        // This section is only for the map screen and not for the search results screen
+        // The condition has been simplified to fix the logical flaw
+        if (hasSuggestions && widget.onSearchToggled != null)
           SizedBox(
             height: MediaQuery.of(context).size.height * 0.4,
             child: Container(
@@ -237,9 +252,7 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
                             return ListTile(
                               leading: const Icon(Icons.location_on),
                               title: Text(place.description ?? ''),
-                              onTap: () {
-                                _handlePlaceTap(place);
-                              },
+                              onTap: () => _handlePlaceTap(place),
                             );
                           }).toList(),
                         ],
@@ -268,10 +281,7 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
                               ),
                               title: Text(user.name),
                               subtitle: Text(user.shortBio),
-                              onTap: () {
-                                context.push('/profile/${user.uid}');
-                                FocusManager.instance.primaryFocus?.unfocus();
-                              },
+                              onTap: () => context.push('/profile/${user.uid}'),
                             );
                           }).toList(),
                         ],
@@ -288,6 +298,7 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
                         context.push(
                           '/searchResults',
                           extra: {
+                            'query': _searchController.text,
                             'places': _placesSuggestions,
                             'users': _userSuggestions,
                           },

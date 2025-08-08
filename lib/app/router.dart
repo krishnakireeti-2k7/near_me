@@ -17,7 +17,6 @@ import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/features/profile/presentation/edit_profile_screen.dart';
 import 'package:near_me/features/map/presentation/loading_screen.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart'; 
-
 final routerProvider = Provider<GoRouter>((ref) {
   final authAsync = ref.watch(authStateProvider);
   final auth = authAsync.asData?.value;
@@ -103,12 +102,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: '/searchResults', // The new route path
+        path: '/searchResults',
         builder: (context, state) {
           final data = state.extra as Map<String, dynamic>;
           final places = data['places'] as List<Prediction>;
           final users = data['users'] as List<UserProfileModel>;
-          return SearchResultsScreen(places: places, users: users);
+          final query = data['query'] as String; // FIX: Extract the query
+
+          return SearchResultsScreen(
+            places: places,
+            users: users,
+            initialQuery: query, // FIX: Pass the query to the screen
+          );
         },
       ),
     ],
