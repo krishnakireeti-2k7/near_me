@@ -10,24 +10,19 @@ import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:geolocator/geolocator.dart';
-
 /// This is the StateNotifier to manage the GoogleMapController.
 class GoogleMapControllerNotifier extends StateNotifier<GoogleMapController?> {
   GoogleMapControllerNotifier() : super(null);
 
-  // Method to set the controller once the map is created.
   void setController(GoogleMapController controller) {
     state = controller;
   }
 
-  // Method to move the map camera to a specific location.
   void moveCamera(LatLng location) {
     state?.animateCamera(CameraUpdate.newLatLng(location));
   }
 }
 
-/// This provider is a StateNotifierProvider that exposes the GoogleMapControllerNotifier.
-/// It allows widgets to access the map controller and call methods on it.
 final googleMapControllerProvider =
     StateNotifierProvider<GoogleMapControllerNotifier, GoogleMapController?>((
       ref,
@@ -35,21 +30,102 @@ final googleMapControllerProvider =
       return GoogleMapControllerNotifier();
     });
 
-/// This is the existing MapController, which handles location updates.
-/// We'll keep it as a regular Provider.
-final mapControllerProvider = Provider((ref) {
-  final profileRepository = ref.read(profileRepositoryProvider);
-  return MapController(profileRepository: profileRepository);
-});
+// NEW: State class to hold the location sharing status
+class MapLocationState {
+  final bool isLocationSharingEnabled;
 
-/// Stream of user locations from Firestore, but only after user is authenticated
-final userLocationsProvider = StreamProvider<List<UserProfileModel>>((ref) {
-  final authState = ref.watch(authStateProvider).asData?.value;
+  MapLocationState({this.isLocationSharingEnabled = true});
 
-  if (authState == null) {
-    return const Stream.empty(); // Wait until user is logged in
+  MapLocationState copyWith({bool? isLocationSharingEnabled}) {
+    return MapLocationState(
+      isLocationSharingEnabled:
+          isLocationSharingEnabled ?? this.isLocationSharingEnabled,
+    );
+  }
+}
+
+// NEW: The MapLocationNotifier will handle the location logic.
+class MapLocationNotifier extends StateNotifier<MapLocationState> {
+  final ProfileRepository _profileRepository;
+  Timer? _locationUpdateTimer;
+  String? _currentUserId;
+
+  MapLocationNotifier({required ProfileRepository profileRepository})
+    : _profileRepository = profileRepository,
+      super(MapLocationState());
+
+  void setUserId(String userId) {
+    _currentUserId = userId;
   }
 
+  // NEW METHOD: Toggle location sharing
+  void toggleLocationSharing(bool isEnabled) {
+    if (_currentUserId == null) return;
+    state = state.copyWith(isLocationSharingEnabled: isEnabled);
+    if (isEnabled) {
+      _startLocationUpdates(_currentUserId!);
+    } else {
+      _stopLocationUpdates();
+    }
+  }
+
+  // NEW METHOD: Manual location update
+  Future<void> updateLocationNow() async {
+    if (_currentUserId == null) return;
+    await _getCurrentLocationAndSendUpdate(_currentUserId!);
+  }
+
+  // CORRECTED: This method was missing before. It stops the timer and resets the state for a clean logout.
+  void signOutCleanup() {
+    _stopLocationUpdates();
+    _currentUserId = null;
+    state = state.copyWith(isLocationSharingEnabled: false);
+  }
+
+  // The existing logic is now encapsulated here.
+  void _startLocationUpdates(String userId) {
+    _locationUpdateTimer?.cancel();
+    _locationUpdateTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      _getCurrentLocationAndSendUpdate(userId);
+    });
+  }
+
+  void _stopLocationUpdates() {
+    _locationUpdateTimer?.cancel();
+    _locationUpdateTimer = null;
+  }
+
+  Future<void> _getCurrentLocationAndSendUpdate(String userId) async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.bestForNavigation,
+      );
+      final newLocation = GeoPoint(position.latitude, position.longitude);
+      await _profileRepository.updateUserLocation(userId, newLocation);
+    } catch (e) {
+      debugPrint('Failed to get or update location: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopLocationUpdates();
+    super.dispose();
+  }
+}
+
+// NEW: This provider exposes the MapLocationNotifier
+final mapLocationProvider =
+    StateNotifierProvider<MapLocationNotifier, MapLocationState>((ref) {
+      final profileRepository = ref.read(profileRepositoryProvider);
+      return MapLocationNotifier(profileRepository: profileRepository);
+    });
+
+final userLocationsProvider = StreamProvider<List<UserProfileModel>>((ref) {
+  final authState = ref.watch(authStateProvider).asData?.value;
+  if (authState == null) {
+    return const Stream.empty();
+  }
   return FirebaseFirestore.instance.collection('users').snapshots().map((
     snapshot,
   ) {
@@ -59,41 +135,3 @@ final userLocationsProvider = StreamProvider<List<UserProfileModel>>((ref) {
         .toList();
   });
 });
-
-/// Controller to manage location updates
-class MapController {
-  final ProfileRepository _profileRepository;
-  Timer? _locationUpdateTimer;
-
-  MapController({required ProfileRepository profileRepository})
-    : _profileRepository = profileRepository;
-
-  /// Start sending user location to Firestore every 5 minutes
-  void startLocationUpdates(String userId) {
-    _locationUpdateTimer?.cancel(); // Cancel any previous timer
-    _locationUpdateTimer = Timer.periodic(const Duration(minutes: 5), (
-      _,
-    ) async {
-      try {
-        final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.bestForNavigation,
-        );
-        final newLocation = GeoPoint(position.latitude, position.longitude);
-        await _profileRepository.updateUserLocation(userId, newLocation);
-      } catch (e) {
-        debugPrint('Failed to get or update location: $e');
-      }
-    });
-  }
-
-  /// Stop location updates (call this on logout)
-  void stopLocationUpdates() {
-    _locationUpdateTimer?.cancel();
-    _locationUpdateTimer = null;
-  }
-
-  /// Call this on logout to clean up state
-  void signOutCleanup() {
-    stopLocationUpdates();
-  }
-}

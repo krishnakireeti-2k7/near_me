@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:near_me/features/map/controller/map_controller.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
@@ -64,12 +65,10 @@ class MiniProfileCard extends ConsumerWidget {
             imageUrlToShow: imageUrlToShow,
           ),
           const SizedBox(height: 12),
-
           if (user.tags.isNotEmpty) ...[
             InterestsSection(tags: user.tags),
             const SizedBox(height: 12),
           ],
-
           if ((user.socialHandles['instagram'] ?? '').isNotEmpty ||
               (user.socialHandles['twitter'] ?? '').isNotEmpty) ...[
             const Divider(),
@@ -101,7 +100,6 @@ class MiniProfileCard extends ConsumerWidget {
               ),
             const SizedBox(height: 12),
           ],
-
           if (currentUser != null && !isCurrentUser)
             Column(
               children: [
@@ -143,11 +141,9 @@ class MiniProfileCard extends ConsumerWidget {
                           localInterestsServiceProvider,
                         );
                         final profileRepo = ref.read(profileRepositoryProvider);
-
                         final currentDailyCount =
                             await localInterestsService
                                 .getDailyInterestsCount();
-
                         if (currentDailyCount >= maxDailyInterests) {
                           showFloatingSnackBar(
                             context,
@@ -155,20 +151,14 @@ class MiniProfileCard extends ConsumerWidget {
                           );
                           return;
                         }
-
                         if (currentUser.uid != null && user.uid != null) {
-                          // 1. Increment the local counter for spam prevention
                           await localInterestsService
                               .incrementDailyInterestsCount();
-                          // 2. Save the interest to Firestore and increment the server-side count
                           await profileRepo.saveInterest(
                             currentUser.uid,
                             user.uid,
                           );
-                          // The Firestore StreamProvider handles the real-time UI update for the map counter
                         }
-
-                        // Corrected order: Show snackbar first, then pop
                         showFloatingSnackBar(
                           context,
                           'Notified to the person!',
@@ -179,7 +169,6 @@ class MiniProfileCard extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-
                 SizedBox(
                   width: double.infinity,
                   child: DecoratedBox(
@@ -217,6 +206,81 @@ class MiniProfileCard extends ConsumerWidget {
                           ),
                         );
                       },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          if (isCurrentUser)
+            Column(
+              children: [
+                const Divider(),
+                Card(
+                  color: Theme.of(context).cardColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.0),
+                  ),
+                  child: Consumer(
+                    builder: (context, ref, child) {
+                      final isSharingLocation =
+                          ref
+                              .watch(mapLocationProvider)
+                              .isLocationSharingEnabled;
+                      return SwitchListTile(
+                        title: const Text('Share My Location'),
+                        subtitle:
+                            isSharingLocation
+                                ? const Text(
+                                  'Your location is updating automatically.',
+                                )
+                                : const Text('Your location is paused.'),
+                        value: isSharingLocation,
+                        onChanged: (value) {
+                          ref
+                              .read(mapLocationProvider.notifier)
+                              .toggleLocationSharing(value);
+                        },
+                        activeColor: Colors.white,
+                        activeTrackColor: const Color(0xFFff6b6b),
+                        inactiveThumbColor: Colors.grey.shade300,
+                        inactiveTrackColor: Colors.grey.shade700,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: primaryGradient,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await ref
+                            .read(mapLocationProvider.notifier)
+                            .updateLocationNow();
+                        showFloatingSnackBar(
+                          context,
+                          'Location Updated!',
+                          leadingIcon: Icons.check_circle,
+                          backgroundColor: Colors.green,
+                        );
+                        Navigator.of(context).pop();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        'Update Location Now',
+                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      ),
                     ),
                   ),
                 ),

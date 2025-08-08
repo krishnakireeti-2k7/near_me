@@ -27,7 +27,6 @@ import 'package:near_me/features/map/widgets/daily_interests_counter_widget.dart
 // Import the LocationService
 import 'package:near_me/services/location_service.dart';
 
-
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
@@ -36,7 +35,6 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
-  // Use a GlobalKey to access the SearchBarWidget's state
   final GlobalKey<SearchBarWidgetState> _searchBarKey =
       GlobalKey<SearchBarWidgetState>();
 
@@ -44,23 +42,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _isLocationPermissionGranted = false;
   bool _isLocationServiceEnabled = false;
   String? _locationStatusMessage;
-
-  // NEW: State variable to track if search results are displayed
   bool _isSearchResultsVisible = false;
 
-  late final MapController _mapControllerInstanceForCleanup;
   static const LatLng _defaultLocation = LatLng(37.7749, -122.4194);
+
+  // No longer need to manually manage the controller or timer
+  // The MapLocationNotifier will handle cleanup automatically
+  // late final MapController _mapControllerInstanceForCleanup;
 
   @override
   void initState() {
     super.initState();
-    _mapControllerInstanceForCleanup = ref.read(mapControllerProvider);
+    // Start location updates as soon as the user is authenticated.
     _startLocationUpdatesIfPermitted(ref.read(authStateProvider).value);
   }
 
   @override
   void dispose() {
-    _mapControllerInstanceForCleanup.stopLocationUpdates();
+    // We no longer need to manually call stopLocationUpdates()
+    // The MapLocationNotifier's dispose method will handle timer cleanup.
     super.dispose();
   }
 
@@ -110,7 +110,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     _updateLocationStatus(isPermissionGranted: true, message: null);
     _goToCurrentLocationAndRecenter();
-    _mapControllerInstanceForCleanup.startLocationUpdates(currentUser.uid);
+
+    // CORRECTED: Use the new mapLocationProvider to start updates
+    ref.read(mapLocationProvider.notifier).setUserId(currentUser.uid);
+    ref.read(mapLocationProvider.notifier).toggleLocationSharing(true);
   }
 
   void _updateLocationStatus({
@@ -452,23 +455,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     ),
                   ),
 
-                  // NEW: Transparent overlay to capture taps when search results are visible
                   if (_isSearchResultsVisible)
                     Positioned.fill(
                       child: GestureDetector(
                         onTap: () {
-                          // Dismiss the keyboard and clear search suggestions
                           FocusScope.of(context).unfocus();
                           _searchBarKey.currentState?.clearSuggestions();
                           setState(() {
                             _isSearchResultsVisible = false;
                           });
                         },
-                        child: Container(
-                          color: Colors.black.withOpacity(
-                            0.0,
-                          ), // Invisible container
-                        ),
+                        child: Container(color: Colors.black.withOpacity(0.0)),
                       ),
                     ),
 
@@ -491,7 +488,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           onUserSearch: (query) {
                             // TODO: Implement user search logic here.
                           },
-                          // NEW: Callback to notify MapScreen of search results visibility
                           onSearchToggled: (isVisible) {
                             setState(() {
                               _isSearchResultsVisible = isVisible;

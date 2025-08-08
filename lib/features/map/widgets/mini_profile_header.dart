@@ -84,9 +84,7 @@ class MiniProfileHeader extends StatelessWidget {
                     ),
                 ],
               ),
-              // --- MODIFICATION STARTS HERE ---
-              // ONLY show last active if it's NOT the current user
-              if (!isCurrentUser) // <--- ADD THIS CONDITION
+              if (!isCurrentUser)
                 Padding(
                   padding: const EdgeInsets.only(top: 2.0),
                   child: Text(
@@ -98,8 +96,6 @@ class MiniProfileHeader extends StatelessWidget {
                     ),
                   ),
                 ),
-
-              // --- MODIFICATION ENDS HERE ---
               if (user.shortBio.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 4.0),
