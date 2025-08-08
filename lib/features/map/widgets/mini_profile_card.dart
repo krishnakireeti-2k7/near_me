@@ -11,7 +11,7 @@ import 'package:near_me/features/map/widgets/mini_profile_header.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/services/local_interests_service.dart';
-import 'package:near_me/widgets/themed_switch_list_tile.dart'; // Import the new widget
+import 'package:near_me/widgets/themed_switch_list_tile.dart';
 
 // Maximum daily interests allowed
 const int maxDailyInterests = 10;
@@ -245,16 +245,28 @@ class MiniProfileCard extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: ElevatedButton(
+                      // UPDATED: This button now checks the result of the updateLocationNow() call
                       onPressed: () async {
-                        await ref
-                            .read(mapLocationProvider.notifier)
-                            .updateLocationNow();
-                        showFloatingSnackBar(
-                          context,
-                          'Location Updated!',
-                          leadingIcon: Icons.check_circle,
-                          backgroundColor: Colors.green,
-                        );
+                        final success =
+                            await ref
+                                .read(mapLocationProvider.notifier)
+                                .updateLocationNow();
+                        if (success) {
+                          showFloatingSnackBar(
+                            context,
+                            'Location Updated!',
+                            leadingIcon: Icons.check_circle,
+                            backgroundColor: Colors.green,
+                          );
+                        } else {
+                          // Show a different message if permission was denied
+                          showFloatingSnackBar(
+                            context,
+                            'Location permission denied. Please enable it in settings.',
+                            leadingIcon: Icons.error,
+                            backgroundColor: Colors.red,
+                          );
+                        }
                         Navigator.of(context).pop();
                       },
                       style: ElevatedButton.styleFrom(

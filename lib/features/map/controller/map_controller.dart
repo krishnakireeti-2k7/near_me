@@ -10,6 +10,7 @@ import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:geolocator/geolocator.dart';
+
 /// This is the StateNotifier to manage the GoogleMapController.
 class GoogleMapControllerNotifier extends StateNotifier<GoogleMapController?> {
   GoogleMapControllerNotifier() : super(null);
@@ -69,10 +70,31 @@ class MapLocationNotifier extends StateNotifier<MapLocationState> {
     }
   }
 
-  // NEW METHOD: Manual location update
-  Future<void> updateLocationNow() async {
-    if (_currentUserId == null) return;
-    await _getCurrentLocationAndSendUpdate(_currentUserId!);
+  // UPDATED METHOD: Manual location update with permission check
+  Future<bool> updateLocationNow() async {
+    if (_currentUserId == null) return false;
+
+    // Check for permission first
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return false; // Permission denied, cannot update location
+      }
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.bestForNavigation,
+      );
+      final newLocation = GeoPoint(position.latitude, position.longitude);
+      await _profileRepository.updateUserLocation(_currentUserId!, newLocation);
+      return true; // Location updated successfully
+    } catch (e) {
+      debugPrint('Failed to get or update location: $e');
+      return false; // An error occurred
+    }
   }
 
   // CORRECTED: This method was missing before. It stops the timer and resets the state for a clean logout.
