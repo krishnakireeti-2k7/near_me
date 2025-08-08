@@ -1,14 +1,42 @@
+// file: lib/features/map/controller/map_controller.dart
+
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:geolocator/geolocator.dart';
 
-/// Provides access to the MapController
+/// This is the StateNotifier to manage the GoogleMapController.
+class GoogleMapControllerNotifier extends StateNotifier<GoogleMapController?> {
+  GoogleMapControllerNotifier() : super(null);
+
+  // Method to set the controller once the map is created.
+  void setController(GoogleMapController controller) {
+    state = controller;
+  }
+
+  // Method to move the map camera to a specific location.
+  void moveCamera(LatLng location) {
+    state?.animateCamera(CameraUpdate.newLatLng(location));
+  }
+}
+
+/// This provider is a StateNotifierProvider that exposes the GoogleMapControllerNotifier.
+/// It allows widgets to access the map controller and call methods on it.
+final googleMapControllerProvider =
+    StateNotifierProvider<GoogleMapControllerNotifier, GoogleMapController?>((
+      ref,
+    ) {
+      return GoogleMapControllerNotifier();
+    });
+
+/// This is the existing MapController, which handles location updates.
+/// We'll keep it as a regular Provider.
 final mapControllerProvider = Provider((ref) {
   final profileRepository = ref.read(profileRepositoryProvider);
   return MapController(profileRepository: profileRepository);

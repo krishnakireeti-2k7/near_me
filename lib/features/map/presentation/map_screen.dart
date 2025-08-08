@@ -23,8 +23,10 @@ import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:near_me/features/map/widgets/daily_interests_counter_widget.dart';
 
-// NEW: Import the LocationService
+
+// Import the LocationService
 import 'package:near_me/services/location_service.dart';
+
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -34,11 +36,17 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
-  GoogleMapController? _mapController;
+  // Use a GlobalKey to access the SearchBarWidget's state
+  final GlobalKey<SearchBarWidgetState> _searchBarKey =
+      GlobalKey<SearchBarWidgetState>();
+
   Set<Marker> _markers = {};
   bool _isLocationPermissionGranted = false;
   bool _isLocationServiceEnabled = false;
   String? _locationStatusMessage;
+
+  // NEW: State variable to track if search results are displayed
+  bool _isSearchResultsVisible = false;
 
   late final MapController _mapControllerInstanceForCleanup;
   static const LatLng _defaultLocation = LatLng(37.7749, -122.4194);
@@ -53,7 +61,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void dispose() {
     _mapControllerInstanceForCleanup.stopLocationUpdates();
-    _mapController?.dispose();
     super.dispose();
   }
 
@@ -102,7 +109,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     _updateLocationStatus(isPermissionGranted: true, message: null);
-    // NEW: After getting permission, recenter the map immediately
     _goToCurrentLocationAndRecenter();
     _mapControllerInstanceForCleanup.startLocationUpdates(currentUser.uid);
   }
@@ -322,11 +328,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   void _animateCameraToUserLocation(GeoPoint? location) {
-    if (_mapController != null &&
+    final mapController = ref.read(googleMapControllerProvider);
+    if (mapController != null &&
         location != null &&
         location.latitude != 0 &&
         location.longitude != 0) {
-      _mapController!.animateCamera(
+      mapController.animateCamera(
         CameraUpdate.newLatLngZoom(
           LatLng(location.latitude, location.longitude),
           19,
@@ -336,18 +343,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   void _handlePlaceSelected(LatLng location) {
-    if (_mapController != null) {
-      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(location, 19));
+    final mapController = ref.read(googleMapControllerProvider);
+    if (mapController != null) {
+      mapController.animateCamera(CameraUpdate.newLatLngZoom(location, 19));
     }
   }
 
-  // NEW: Method to get the current location and recenter the map
   Future<void> _goToCurrentLocationAndRecenter() async {
     try {
       final position =
           await ref.read(locationServiceProvider).getCurrentLocation();
-      if (position != null) {
-        _mapController!.animateCamera(
+      final mapController = ref.read(googleMapControllerProvider);
+
+      if (position != null && mapController != null) {
+        mapController.animateCamera(
           CameraUpdate.newCameraPosition(
             CameraPosition(
               target: LatLng(position.latitude, position.longitude),
@@ -370,19 +379,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _startLocationUpdatesIfPermitted(next.value);
       }
     });
-
-    // REMOVED: This listener is no longer strictly needed for the initial recenter,
-    // as we now handle it explicitly. It can be kept for other updates if desired.
-    // ref.listen<AsyncValue<UserProfileModel?>>(
-    //   currentUserProfileStreamProvider,
-    //   (previous, next) {
-    //     if (next.hasValue &&
-    //         next.value != null &&
-    //         next.value!.location != null) {
-    //       _animateCameraToUserLocation(next.value!.location);
-    //     }
-    //   },
-    // );
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -420,37 +416,61 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
               return Stack(
                 children: [
-                  GoogleMap(
-                    onMapCreated: (controller) async {
-                      _mapController = controller;
-                      try {
-                        final jsonString = await rootBundle.loadString(
-                          'assets/map_style.json',
+                  Positioned.fill(
+                    child: GoogleMap(
+                      onMapCreated: (controller) async {
+                        final mapControllerNotifier = ref.read(
+                          googleMapControllerProvider.notifier,
                         );
-                        await _mapController?.setMapStyle(jsonString);
-                        // NEW: Recenter the camera on map creation, but only if permission is granted
-                        if (_isLocationPermissionGranted &&
-                            _isLocationServiceEnabled) {
-                          _goToCurrentLocationAndRecenter();
-                        } else {
-                          // Fallback to the default location if no permission
-                          _mapController!.animateCamera(
-                            CameraUpdate.newLatLngZoom(_defaultLocation, 19),
+                        mapControllerNotifier.setController(controller);
+
+                        try {
+                          final jsonString = await rootBundle.loadString(
+                            'assets/map_style.json',
                           );
+                          await controller.setMapStyle(jsonString);
+                          if (_isLocationPermissionGranted &&
+                              _isLocationServiceEnabled) {
+                            _goToCurrentLocationAndRecenter();
+                          } else {
+                            controller.animateCamera(
+                              CameraUpdate.newLatLngZoom(_defaultLocation, 19),
+                            );
+                          }
+                        } catch (e) {
+                          debugPrint('Failed to load map style: $e');
                         }
-                      } catch (e) {
-                        debugPrint('Failed to load map style: $e');
-                      }
-                    },
-                    initialCameraPosition: CameraPosition(
-                      target: cameraTarget,
-                      zoom: 19,
+                      },
+                      initialCameraPosition: CameraPosition(
+                        target: cameraTarget,
+                        zoom: 19,
+                      ),
+                      markers: _markers,
+                      myLocationEnabled: _isLocationPermissionGranted,
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: true,
                     ),
-                    markers: _markers,
-                    myLocationEnabled: _isLocationPermissionGranted,
-                    myLocationButtonEnabled: false,
-                    zoomControlsEnabled: true,
                   ),
+
+                  // NEW: Transparent overlay to capture taps when search results are visible
+                  if (_isSearchResultsVisible)
+                    Positioned.fill(
+                      child: GestureDetector(
+                        onTap: () {
+                          // Dismiss the keyboard and clear search suggestions
+                          FocusScope.of(context).unfocus();
+                          _searchBarKey.currentState?.clearSuggestions();
+                          setState(() {
+                            _isSearchResultsVisible = false;
+                          });
+                        },
+                        child: Container(
+                          color: Colors.black.withOpacity(
+                            0.0,
+                          ), // Invisible container
+                        ),
+                      ),
+                    ),
 
                   Positioned(
                     top: 50,
@@ -459,12 +479,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     child: Builder(
                       builder: (context) {
                         return SearchBarWidget(
+                          key: _searchBarKey,
                           scaffoldContext: context,
                           onPlaceSelected: (location) {
                             _handlePlaceSelected(location);
+                            _searchBarKey.currentState?.clearSuggestions();
+                            setState(() {
+                              _isSearchResultsVisible = false;
+                            });
                           },
                           onUserSearch: (query) {
                             // TODO: Implement user search logic here.
+                          },
+                          // NEW: Callback to notify MapScreen of search results visibility
+                          onSearchToggled: (isVisible) {
+                            setState(() {
+                              _isSearchResultsVisible = isVisible;
+                            });
                           },
                         );
                       },
@@ -476,7 +507,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     right: 20,
                     child: FloatingActionButton(
                       heroTag: 'locationButton',
-                      // NEW: Use the explicit recenter method
                       onPressed: _goToCurrentLocationAndRecenter,
                       child: const Icon(Icons.my_location),
                     ),

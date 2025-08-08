@@ -9,28 +9,28 @@ import 'package:uuid/uuid.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
-// Your Google Places API Key
 const String googleApiKey = 'AIzaSyCmom1vOzH73kkgxgPNMX-F65hSv2LKryI';
 
-// Change from StatefulWidget to ConsumerStatefulWidget
 class SearchBarWidget extends ConsumerStatefulWidget {
   final Function(LatLng) onPlaceSelected;
   final Function(String) onUserSearch;
   final BuildContext scaffoldContext;
+  // NEW: Add the onSearchToggled callback
+  final Function(bool)? onSearchToggled;
 
   const SearchBarWidget({
     super.key,
     required this.onPlaceSelected,
     required this.onUserSearch,
     required this.scaffoldContext,
+    this.onSearchToggled,
   });
 
   @override
-  ConsumerState<SearchBarWidget> createState() => _SearchBarWidgetState();
+  ConsumerState<SearchBarWidget> createState() => SearchBarWidgetState();
 }
 
-// Change from State to ConsumerState
-class _SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
+class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
   final TextEditingController _searchController = TextEditingController();
   final places = GoogleMapsPlaces(apiKey: googleApiKey);
   final uuid = const Uuid();
@@ -40,10 +40,33 @@ class _SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
   List<UserProfileModel> _userSuggestions = [];
   bool _isSearching = false;
 
+  void clearSuggestions() {
+    if (mounted) {
+      setState(() {
+        _isSearching = false;
+        _placesSuggestions = [];
+        _userSuggestions = [];
+        _searchController.clear();
+      });
+      FocusManager.instance.primaryFocus?.unfocus();
+      // NEW: Call the callback to notify the parent
+      widget.onSearchToggled?.call(false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _sessionToken = uuid.v4();
+    _searchController.addListener(() {
+      final isSearchingNow = _searchController.text.isNotEmpty;
+      if (isSearchingNow != _isSearching) {
+        _isSearching = isSearchingNow;
+        // NEW: Call the callback when the search state changes
+        widget.onSearchToggled?.call(isSearchingNow);
+      }
+      _onSearchChanged(_searchController.text);
+    });
   }
 
   @override
@@ -54,9 +77,9 @@ class _SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
 
   void _getPlacesSuggestions(String query) async {
     if (query.isEmpty) {
-      setState(() {
-        _placesSuggestions = [];
-      });
+      if (mounted) {
+        setState(() => _placesSuggestions = []);
+      }
       return;
     }
 
@@ -71,9 +94,9 @@ class _SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
     );
 
     if (res.isOkay) {
-      setState(() {
-        _placesSuggestions = res.predictions!;
-      });
+      if (mounted) {
+        setState(() => _placesSuggestions = res.predictions!);
+      }
     } else {
       debugPrint('Google Places API Error: ${res.errorMessage}');
     }
@@ -81,11 +104,15 @@ class _SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
 
   void _handlePlaceTap(Prediction place) async {
     _searchController.clear();
-    setState(() {
-      _isSearching = false;
-      _placesSuggestions = [];
-      _userSuggestions = [];
-    });
+    if (mounted) {
+      setState(() {
+        _isSearching = false;
+        _placesSuggestions = [];
+        _userSuggestions = [];
+      });
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    widget.onSearchToggled?.call(false);
 
     final placeDetails = await places.getDetailsByPlaceId(
       place.placeId!,
@@ -107,22 +134,20 @@ class _SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
       setState(() {
         _isSearching = true;
       });
-      // Trigger the Google Places search
       _getPlacesSuggestions(query);
 
-      // Watch the user search provider and get the results
       ref
           .read(searchUsersByNameProvider(query).future)
           .then((users) {
-            setState(() {
-              _userSuggestions = users;
-            });
+            if (mounted) {
+              setState(() => _userSuggestions = users);
+            }
           })
           .catchError((error) {
             debugPrint('Error searching users: $error');
-            setState(() {
-              _userSuggestions = [];
-            });
+            if (mounted) {
+              setState(() => _userSuggestions = []);
+            }
           });
     } else {
       setState(() {
@@ -131,17 +156,16 @@ class _SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
         _userSuggestions = [];
       });
     }
+    // No need to call onSearchToggled here anymore, as it's handled in the listener.
   }
 
   @override
   Widget build(BuildContext context) {
-    // This is the updated build method that combines both place and user results.
     final hasSuggestions =
         _placesSuggestions.isNotEmpty || _userSuggestions.isNotEmpty;
 
     return Column(
       children: [
-        // Your search bar UI remains the same.
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           height: 56,
@@ -171,15 +195,13 @@ class _SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(vertical: 16),
                   ),
-                  onChanged: _onSearchChanged,
+                  // The onChanged is still needed for filtering, but onSearchToggled is handled by the listener
                 ),
               ),
               IconButton(icon: const Icon(Icons.search), onPressed: () {}),
             ],
           ),
         ),
-
-        // Display combined search results.
         if (hasSuggestions)
           SizedBox(
             height: MediaQuery.of(context).size.height * 0.4,
@@ -196,63 +218,90 @@ class _SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
                   ),
                 ],
               ),
-              child: ListView(
-                shrinkWrap: true,
-                padding: EdgeInsets.zero,
+              child: Column(
                 children: [
-                  // Start of Places Section (now first)
-                  if (_placesSuggestions.isNotEmpty) ...[
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: Text(
-                        'Places',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                  Expanded(
+                    child: ListView(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      children: [
+                        if (_placesSuggestions.isNotEmpty) ...[
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+                            child: Text(
+                              'Places',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          ..._placesSuggestions.map((place) {
+                            return ListTile(
+                              leading: const Icon(Icons.location_on),
+                              title: Text(place.description ?? ''),
+                              onTap: () {
+                                _handlePlaceTap(place);
+                              },
+                            );
+                          }).toList(),
+                        ],
+                        if (_placesSuggestions.isNotEmpty &&
+                            _userSuggestions.isNotEmpty)
+                          const Divider(),
+                        if (_userSuggestions.isNotEmpty) ...[
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+                            child: Text(
+                              'Users',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          ..._userSuggestions.map((user) {
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundImage:
+                                    user.profileImageUrl.isNotEmpty
+                                        ? NetworkImage(user.profileImageUrl)
+                                        : null,
+                                child:
+                                    user.profileImageUrl.isEmpty
+                                        ? const Icon(Icons.person)
+                                        : null,
+                              ),
+                              title: Text(user.name),
+                              subtitle: Text(user.shortBio),
+                              onTap: () {
+                                context.push('/profile/${user.uid}');
+                                FocusManager.instance.primaryFocus?.unfocus();
+                              },
+                            );
+                          }).toList(),
+                        ],
+                      ],
                     ),
-                    ..._placesSuggestions.map((place) {
-                      return ListTile(
-                        leading: const Icon(Icons.location_on),
-                        title: Text(place.description ?? ''),
-                        onTap: () => _handlePlaceTap(place),
-                      );
-                    }).toList(),
-                  ],
-
-                  // Divider between sections
-                  if (_placesSuggestions.isNotEmpty &&
-                      _userSuggestions.isNotEmpty)
-                    const Divider(),
-
-                  // Start of Users Section (now second)
-                  if (_userSuggestions.isNotEmpty) ...[
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: Text(
-                        'Users',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
                     ),
-                    ..._userSuggestions.map((user) {
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage:
-                              user.profileImageUrl.isNotEmpty
-                                  ? NetworkImage(user.profileImageUrl)
-                                  : null,
-                          child:
-                              user.profileImageUrl.isEmpty
-                                  ? const Icon(Icons.person)
-                                  : null,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        context.push(
+                          '/searchResults',
+                          extra: {
+                            'places': _placesSuggestions,
+                            'users': _userSuggestions,
+                          },
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(40),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
                         ),
-                        title: Text(user.name),
-                        subtitle: Text(user.shortBio),
-                        onTap: () {
-                          // Navigate to the user's profile using the UID
-                          context.push('/profile/${user.uid}');
-                        },
-                      );
-                    }).toList(),
-                  ],
+                      ),
+                      child: const Text('View All Results'),
+                    ),
+                  ),
                 ],
               ),
             ),

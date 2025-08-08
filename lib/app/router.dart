@@ -1,11 +1,13 @@
 // file: lib/app/router.dart
 
+import 'package:flutter_google_maps_webservices/places.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:go_router/go_router.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/auth/auth_view.dart';
+import 'package:near_me/features/map/widgets/searc_results_screen.dart';
 import 'package:near_me/features/notificatons/notifications_screen.dart';
 import 'package:near_me/features/profile/presentation/create_profile_screen.dart';
 import 'package:near_me/features/map/presentation/map_screen.dart';
@@ -14,6 +16,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/features/profile/presentation/edit_profile_screen.dart';
 import 'package:near_me/features/map/presentation/loading_screen.dart';
+import 'package:near_me/features/profile/model/user_profile_model.dart'; 
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authAsync = ref.watch(authStateProvider);
@@ -64,7 +67,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const CreateProfileScreen(),
       ),
       GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
-      // <--- ADD THE NEW ROUTE FOR INTERESTS HERE
       GoRoute(
         path: '/interests',
         builder: (context, state) => const NotificationsScreen(),
@@ -98,6 +100,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final userId = state.pathParameters['userId']!;
           return EditProfileScreen(userId: userId);
+        },
+      ),
+      GoRoute(
+        path: '/searchResults', // The new route path
+        builder: (context, state) {
+          final data = state.extra as Map<String, dynamic>;
+          final places = data['places'] as List<Prediction>;
+          final users = data['users'] as List<UserProfileModel>;
+          return SearchResultsScreen(places: places, users: users);
         },
       ),
     ],
