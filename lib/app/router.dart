@@ -17,43 +17,69 @@ import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/features/profile/presentation/edit_profile_screen.dart';
 import 'package:near_me/features/map/presentation/loading_screen.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart'; 
-final routerProvider = Provider<GoRouter>((ref) {
-  final authAsync = ref.watch(authStateProvider);
-  final auth = authAsync.asData?.value;
+// NEW: A combined provider that watches both auth state and profile state
+final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
+  final auth = ref.watch(authStateProvider);
 
-  final currentProfileAsync =
-      auth != null
-          ? ref.watch(userProfileProvider(auth.uid))
-          : const AsyncValue.data(null);
-  final currentProfile = currentProfileAsync.asData?.value;
+  if (auth.isLoading) {
+    yield {'status': 'loading'};
+    return;
+  }
+
+  final user = auth.value;
+  if (user == null) {
+    yield {'status': 'unauthenticated'};
+    return;
+  }
+
+  // Watch the user profile stream. This provider will yield
+  // a new value whenever the user profile changes.
+  await for (final userProfile in ref.watch(
+    currentUserProfileStreamProvider.stream,
+  )) {
+    if (userProfile == null) {
+      yield {'status': 'needs-profile', 'user': user};
+    } else {
+      yield {'status': 'authenticated', 'user': user, 'profile': userProfile};
+    }
+  }
+});
+
+final routerProvider = Provider<GoRouter>((ref) {
+  final bootstrapper = ref.watch(bootstrapperProvider);
 
   return GoRouter(
     initialLocation: '/',
     refreshListenable: GoRouterRefreshStream(
-      ref.watch(authStateProvider.stream),
+      ref.watch(bootstrapperProvider.stream),
     ),
     redirect: (context, state) {
-      if (authAsync.isLoading) {
+      final status = bootstrapper.asData?.value['status'];
+
+      if (bootstrapper.isLoading) {
         return null;
       }
 
-      if (auth == null) {
+      if (status == 'unauthenticated' || status == null) {
         return (state.matchedLocation != '/login') ? '/login' : null;
       }
 
-      final isCreatingOrEditingProfile =
-          state.matchedLocation == '/create-profile' ||
-          state.matchedLocation.startsWith('/edit-profile');
+      if (status == 'needs-profile') {
+        final isCreatingOrEditingProfile =
+            state.matchedLocation == '/create-profile' ||
+            state.matchedLocation.startsWith('/edit-profile');
 
-      if (currentProfile == null && !isCreatingOrEditingProfile) {
-        return '/create-profile';
+        return !isCreatingOrEditingProfile ? '/create-profile' : null;
       }
 
-      if (currentProfile != null &&
-          (state.matchedLocation == '/login' ||
-              state.matchedLocation == '/create-profile' ||
-              state.matchedLocation == '/')) {
-        return '/map';
+      // User is authenticated and has a profile
+      if (status == 'authenticated') {
+        final isAuthRoute =
+            state.matchedLocation == '/login' ||
+            state.matchedLocation == '/create-profile' ||
+            state.matchedLocation == '/';
+
+        return isAuthRoute ? '/map' : null;
       }
 
       return null;
@@ -107,12 +133,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           final data = state.extra as Map<String, dynamic>;
           final places = data['places'] as List<Prediction>;
           final users = data['users'] as List<UserProfileModel>;
-          final query = data['query'] as String; // FIX: Extract the query
+          final query = data['query'] as String;
 
           return SearchResultsScreen(
             places: places,
             users: users,
-            initialQuery: query, // FIX: Pass the query to the screen
+            initialQuery: query,
           );
         },
       ),
