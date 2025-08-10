@@ -6,10 +6,15 @@ import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/model/friendship_model.dart';
 import 'package:near_me/features/profile/repository/friendship_repository.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
+import 'package:near_me/services/notification_service.dart';
 
 // Provides an instance of the FriendshipRepository
 final friendshipRepositoryProvider = Provider<FriendshipRepository>((ref) {
-  return FriendshipRepository(firestore: FirebaseFirestore.instance);
+  return FriendshipRepository(
+    firestore: FirebaseFirestore.instance,
+    // ✅ NEW: Provide the outgoing notification service
+    outgoingNotificationService: ref.read(outgoingNotificationServiceProvider),
+  );
 });
 
 // A stream provider to get all pending friend requests for the current user.

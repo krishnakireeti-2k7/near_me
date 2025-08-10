@@ -5,9 +5,20 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+// ✅ NEW: Import for sending notifications
+import 'package:http/http.dart' as http;
+// ✅ NEW: Import for encoding data
+import 'dart:convert';
+import 'package:flutter/foundation.dart'; // To use debugPrint
 
 final notificationServiceProvider = Provider((ref) => NotificationService(ref));
 
+// ✅ NEW: Provider for the outgoing notification service
+final outgoingNotificationServiceProvider = Provider(
+  (ref) => OutgoingNotificationService(),
+);
+
+// Your existing NotificationService class for INCOMING notifications
 class NotificationService {
   final Ref _ref;
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
@@ -17,7 +28,7 @@ class NotificationService {
   NotificationService(this._ref);
 
   Future<void> initNotifications() async {
-    print('NotificationService: initNotifications started.'); // ADD THIS
+    debugPrint('NotificationService: initNotifications started.');
 
     try {
       // --- LOCAL NOTIFICATIONS SETUP ---
@@ -28,13 +39,9 @@ class NotificationService {
           InitializationSettings(android: initializationSettingsAndroid);
 
       await _flutterLocalNotificationsPlugin.initialize(initializationSettings);
-      print(
-        'NotificationService: Local notifications initialized.',
-      ); // ADD THIS
+      debugPrint('NotificationService: Local notifications initialized.');
 
       // --- FCM SPECIFIC SETUP ---
-
-      // 1. Request permission for notifications
       NotificationSettings settings = await _firebaseMessaging
           .requestPermission(
             alert: true,
@@ -45,52 +52,42 @@ class NotificationService {
             provisional: false,
             sound: true,
           );
-      print(
+      debugPrint(
         'NotificationService: User granted notification permission status: ${settings.authorizationStatus}',
-      ); // MODIFIED PRINT
+      );
 
-      // 2. Get FCM token
       String? token = await _firebaseMessaging.getToken();
-      print(
-        'NotificationService: FCM Token retrieved: $token',
-      ); // MODIFIED PRINT
+      debugPrint('NotificationService: FCM Token retrieved: $token');
 
-      // 3. Save FCM token to Firestore
       if (token != null) {
         await _saveFcmToken(token);
       } else {
-        print(
-          'NotificationService: FCM Token is null, cannot save.',
-        ); // ADD THIS
+        debugPrint('NotificationService: FCM Token is null, cannot save.');
       }
 
       // 4. Handle foreground messages
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        print(
+        debugPrint(
           'NotificationService: Got a message whilst in the foreground!',
-        ); // MODIFIED PRINT
-        print(
-          'NotificationService: Message data: ${message.data}',
-        ); // MODIFIED PRINT
+        );
+        debugPrint('NotificationService: Message data: ${message.data}');
 
         if (message.notification != null) {
-          print(
+          debugPrint(
             'NotificationService: Message also contained a notification: ${message.notification}',
-          ); // MODIFIED PRINT
+          );
           showNotification(
             title: message.notification!.title!,
             body: message.notification!.body!,
           );
         }
       });
-      print(
-        'NotificationService: Foreground message listener set.',
-      ); // ADD THIS
+      debugPrint('NotificationService: Foreground message listener set.');
     } catch (e) {
-      print('NotificationService: Error during initialization: $e'); // ADD THIS
+      debugPrint('NotificationService: Error during initialization: $e');
     }
 
-    print('NotificationService: initNotifications finished.'); // ADD THIS
+    debugPrint('NotificationService: initNotifications finished.');
   }
 
   Future<void> _saveFcmToken(String token) async {
@@ -104,18 +101,18 @@ class NotificationService {
               field: 'fcmToken',
               value: token,
             );
-        print(
+        debugPrint(
           'NotificationService: FCM token saved to Firestore for user: ${user.uid}',
-        ); // MODIFIED PRINT
+        );
       } catch (e) {
-        print(
+        debugPrint(
           'NotificationService: Error saving FCM token to Firestore: $e',
-        ); // ADD THIS
+        );
       }
     } else {
-      print(
+      debugPrint(
         'NotificationService: User not logged in, cannot save FCM token.',
-      ); // ADD THIS
+      );
     }
   }
 
@@ -141,5 +138,40 @@ class NotificationService {
       body,
       platformChannelSpecifics,
     );
+  }
+}
+
+// ✅ NEW: Class for OUTGOING notifications
+class OutgoingNotificationService {
+  // IMPORTANT: Replace with your Cloud Function URL
+  final String _cloudFunctionUrl = 'YOUR_CLOUD_FUNCTION_URL';
+
+  Future<void> sendNotification({
+    required String recipientToken,
+    required String title,
+    required String body,
+    required Map<String, dynamic> data,
+  }) async {
+    final Map<String, dynamic> notificationData = {
+      'token': recipientToken,
+      'title': title,
+      'body': body,
+      'data': data,
+    };
+
+    try {
+      final response = await http.post(
+        Uri.parse(_cloudFunctionUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(notificationData),
+      );
+      if (response.statusCode != 200) {
+        debugPrint('Failed to send notification: ${response.body}');
+      } else {
+        debugPrint('Notification successfully sent!');
+      }
+    } catch (e) {
+      debugPrint('Error sending notification: $e');
+    }
   }
 }

@@ -1,11 +1,11 @@
 // file: functions/src/index.ts
 
-import * as functions from 'firebase-functions'; // v1
+import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import * as pubsub from 'firebase-functions/v1/pubsub'; // ✅ Import v1 pubsub scheduler
+import * as pubsub from 'firebase-functions/v1/pubsub';
 import { firestore } from 'firebase-functions/v2';
 import { setGlobalOptions } from 'firebase-functions/v2/options';
-
+import { HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 
 setGlobalOptions({ region: 'us-central1' });
 
@@ -51,9 +51,11 @@ export const sendInterestNotification = firestore.onDocumentCreated(
   }
 );
 
+// Scheduled Function: Delete interests older than 30 days
 // ✅ Scheduled Function: Delete interests older than 30 days
 export const cleanupOldInterests = pubsub.schedule('every 24 hours').onRun(
     async (context) => {
+        console.log('Running cleanupOldInterests job...'); // ✅ Add this line
         const thirtyDaysAgo = admin.firestore.Timestamp.fromDate(
             new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
         );
@@ -76,3 +78,53 @@ export const cleanupOldInterests = pubsub.schedule('every 24 hours').onRun(
         console.log(`Deleted ${oldInterestsSnapshot.docs.length} old interests.`);
     }
 );
+
+// NEW INTERFACE for type checking the data payload
+interface NotificationData {
+    token: string;
+    title: string;
+    body: string;
+    customData: { [key: string]: string };
+}
+
+// ✅ FINAL FIX: Use the single 'request' parameter with correct types and access properties accordingly.
+export const sendNotification = functions.https.onCall(
+  async (request: CallableRequest<NotificationData>) => { 
+    if (!request.auth) {
+      throw new HttpsError(
+        'unauthenticated', 
+        'The function must be called while authenticated.'
+      );
+    }
+  
+    // The data payload is correctly accessed via request.data
+    const { token, title, body, customData } = request.data;
+  
+    if (!token || !title || !body) {
+      throw new HttpsError(
+        'invalid-argument', 
+        'The function must be called with a token, title, and body.'
+      );
+    }
+  
+    const payload = {
+      notification: {
+        title: title,
+        body: body,
+      },
+      data: customData,
+    };
+  
+    try {
+      const response = await admin.messaging().sendToDevice(token, payload);
+      console.log('Successfully sent message:', response);
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw new HttpsError(
+        'internal', 
+        'Failed to send notification.', 
+        error
+      );
+    }
+});

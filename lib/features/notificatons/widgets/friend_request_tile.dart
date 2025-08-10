@@ -23,12 +23,21 @@ class FriendRequestTile extends ConsumerWidget {
 
   Future<void> _handleAccept(WidgetRef ref, BuildContext context) async {
     final friendshipRepository = ref.read(friendshipRepositoryProvider);
-    final currentUserId = ref.read(currentUserProfileStreamProvider).value?.uid;
+    final currentUserProfile =
+        ref
+            .read(currentUserProfileStreamProvider)
+            .value; // ✅ NEW: Get current user profile
+    final currentUserId = currentUserProfile?.uid;
+    final currentUserName =
+        currentUserProfile?.name ?? ''; // ✅ NEW: Get current user name
+
     if (currentUserId != null) {
       await friendshipRepository.acceptFriendRequest(
         friendshipId: request.id,
         currentUserId: currentUserId,
         otherUserId: profile.uid,
+        currentUserName:
+            currentUserName, // ✅ FIX: Pass the new required parameter
       );
       if (context.mounted) {
         showFloatingSnackBar(

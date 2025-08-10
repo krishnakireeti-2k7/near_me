@@ -106,7 +106,6 @@ class MiniProfileCard extends ConsumerWidget {
               ),
             const SizedBox(height: 12),
           ],
-          // ✅ FIX: This entire block should only be rendered when the user is NOT the current user.
           if (currentUser != null && !isCurrentUser)
             Column(
               children: [
@@ -118,8 +117,11 @@ class MiniProfileCard extends ConsumerWidget {
                     final friendshipRepository = ref.read(
                       friendshipRepositoryProvider,
                     );
-                    final currentUserId =
-                        ref.watch(currentUserProfileStreamProvider).value?.uid;
+                    // ✅ NEW: Get the current user's profile and name
+                    final currentUserProfile =
+                        ref.watch(currentUserProfileStreamProvider).value;
+                    final currentUserId = currentUserProfile?.uid;
+                    final currentUserName = currentUserProfile?.name ?? '';
 
                     // ✅ FIXED LOGIC: Correctly determine sender/receiver
                     return friendshipStatusAsync.when(
@@ -149,18 +151,20 @@ class MiniProfileCard extends ConsumerWidget {
                             );
                           }
                           // Check if the current user is the one who RECEIVED the request
-                          else if (friendship.senderId != currentUserId) {
+                          else {
+                            // No need for 'if else', this is the only other case
                             return SizedBox(
                               width: double.infinity,
                               child: FilledButton(
                                 onPressed: () async {
                                   if (currentUserId != null) {
-                                    await friendshipRepository
-                                        .acceptFriendRequest(
-                                          friendshipId: friendship.id,
-                                          currentUserId: currentUserId,
-                                          otherUserId: user.uid,
-                                        );
+                                    await friendshipRepository.acceptFriendRequest(
+                                      friendshipId: friendship.id,
+                                      currentUserId: currentUserId,
+                                      otherUserId: user.uid,
+                                      currentUserName:
+                                          currentUserName, // ✅ FIX: Add the new parameter
+                                    );
                                   }
                                 },
                                 child: const Text('Accept Request'),
@@ -176,6 +180,8 @@ class MiniProfileCard extends ConsumerWidget {
                               if (currentUserId != null) {
                                 await friendshipRepository.sendFriendRequest(
                                   senderId: currentUserId,
+                                  senderName:
+                                      currentUserName, // ✅ FIX: Add the new parameter
                                   receiverId: user.uid,
                                 );
                               }
@@ -213,7 +219,7 @@ class MiniProfileCard extends ConsumerWidget {
                             Shadow(
                               blurRadius: 2.0,
                               color: Colors.black,
-                              offset: const Offset(0.8, 0.8),
+                              offset: Offset(0.8, 0.8),
                             ),
                           ],
                         ),
@@ -245,7 +251,7 @@ class MiniProfileCard extends ConsumerWidget {
                           );
                           return;
                         }
-                        if (currentUser.uid != null && user.uid != null) {
+                        if (currentUser!.uid != null && user.uid != null) {
                           await localInterestsService
                               .incrementDailyInterestsCount();
                           await profileRepo.saveInterest(
@@ -289,12 +295,7 @@ class MiniProfileCard extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       onPressed: () {
-                        // ✅ FIXED: Use the router to navigate to the full profile page.
-                        // This assumes your router has a path like '/profile/:userId'
-                        // and you need to pass the user's UID.
-                        Navigator.of(
-                          context,
-                        ).pop(); // Close the mini-card first
+                        Navigator.of(context).pop();
                         context.push('/profile/${user.uid}');
                       },
                     ),
@@ -302,7 +303,6 @@ class MiniProfileCard extends ConsumerWidget {
                 ),
               ],
             ),
-          // Your existing code for the current user's profile card
           if (isCurrentUser)
             Column(
               children: [

@@ -11,7 +11,7 @@ import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 // Import the essential reusable widget
-import 'package:near_me/widgets/profile_info_card.dart'; // Ensure this file exists and contains ProfileInfoCard
+import 'package:near_me/widgets/profile_info_card.dart';
 
 // ✅ NEW IMPORTS for Friendship Feature
 import 'package:near_me/features/profile/repository/friendship_repository_provider.dart';
@@ -37,8 +37,7 @@ class ViewProfileScreen extends ConsumerWidget {
     final friendshipStatusAsync = ref.watch(
       friendshipStatusStreamProvider(userId),
     );
-    final currentUserId =
-        ref.watch(currentUserProfileStreamProvider).value?.uid;
+    final currentUserProfileAsync = ref.watch(currentUserProfileStreamProvider);
 
     return profileAsync.when(
       data: (profile) {
@@ -79,8 +78,8 @@ class ViewProfileScreen extends ConsumerWidget {
             title: Text(
               isCurrentUser ? 'My Profile' : profile.name,
               style: theme.textTheme.titleLarge?.copyWith(
-                color: theme.colorScheme.onSurface,
                 fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
               ),
             ),
             backgroundColor: theme.scaffoldBackgroundColor,
@@ -99,21 +98,12 @@ class ViewProfileScreen extends ConsumerWidget {
             actions: [
               if (isCurrentUser) // Enable edit button for current user
                 IconButton(
-                  icon: const Icon(
-                    Icons.edit_note_rounded,
-                    size: 28,
-                  ), // A slightly larger, modern edit icon
-                  color:
-                      theme
-                          .colorScheme
-                          .primary, // Use primary color for consistency
+                  icon: const Icon(Icons.edit_note_rounded, size: 28),
+                  color: theme.colorScheme.primary,
                   onPressed: () {
-                    // Navigate to EditProfileScreen, passing the current user's UID
                     context.push('/edit-profile/${profile.uid}');
                   },
                 ),
-              // We'll place the Befriend button logic in the body to be more prominent
-              // if (!isCurrentUser) ... (old message button removed to avoid clutter)
             ],
           ),
           body: SingleChildScrollView(
@@ -185,14 +175,20 @@ class ViewProfileScreen extends ConsumerWidget {
                           textAlign: TextAlign.center,
                         ),
 
-                      // ✅ NEW: Add the friendship button below the profile info
-                      if (!isCurrentUser && currentUserId != null) ...[
+                      // ✅ UPDATED: Add the friendship button below the profile info
+                      if (!isCurrentUser &&
+                          currentUserProfileAsync.value != null) ...[
                         const SizedBox(height: 24),
                         friendshipStatusAsync.when(
                           data: (friendship) {
                             final friendshipRepository = ref.read(
                               friendshipRepositoryProvider,
                             );
+                            final currentUserProfile =
+                                currentUserProfileAsync.value;
+                            final currentUserId = currentUserProfile?.uid;
+                            final currentUserName =
+                                currentUserProfile?.name ?? '';
 
                             // The user is already a friend
                             if (friendship != null &&
@@ -200,7 +196,6 @@ class ViewProfileScreen extends ConsumerWidget {
                                     FriendshipStatus.accepted) {
                               return FilledButton.tonal(
                                 onPressed: () async {
-                                  // Add an "Unfriend" feature here
                                   showDialog(
                                     context: context,
                                     builder:
@@ -217,16 +212,18 @@ class ViewProfileScreen extends ConsumerWidget {
                                             ),
                                             FilledButton(
                                               onPressed: () async {
-                                                await friendshipRepository
-                                                    .unfriend(
-                                                      user1Id: currentUserId,
-                                                      user2Id: userId,
-                                                    );
-                                                Navigator.of(ctx).pop();
-                                                showFloatingSnackBar(
-                                                  context,
-                                                  'You have unfriended ${profile.name}.',
-                                                );
+                                                if (currentUserId != null) {
+                                                  await friendshipRepository
+                                                      .unfriend(
+                                                        user1Id: currentUserId,
+                                                        user2Id: userId,
+                                                      );
+                                                  Navigator.of(ctx).pop();
+                                                  showFloatingSnackBar(
+                                                    context,
+                                                    'You have unfriended ${profile.name}.',
+                                                  );
+                                                }
                                               },
                                               child: const Text('Unfriend'),
                                             ),
@@ -241,7 +238,8 @@ class ViewProfileScreen extends ConsumerWidget {
                             // A request is pending
                             if (friendship != null &&
                                 friendship.status == FriendshipStatus.pending) {
-                              if (friendship.user1Id == currentUserId) {
+                              if (friendship.senderId == currentUserId) {
+                                // Use friendship.senderId here
                                 return FilledButton.tonal(
                                   onPressed: null,
                                   child: const Text('Request Sent'),
@@ -249,16 +247,20 @@ class ViewProfileScreen extends ConsumerWidget {
                               } else {
                                 return FilledButton(
                                   onPressed: () async {
-                                    await friendshipRepository
-                                        .acceptFriendRequest(
-                                          friendshipId: friendship.id,
-                                          currentUserId: currentUserId,
-                                          otherUserId: userId,
-                                        );
-                                    showFloatingSnackBar(
-                                      context,
-                                      'You are now friends with ${profile.name}!',
-                                    );
+                                    if (currentUserId != null) {
+                                      await friendshipRepository
+                                          .acceptFriendRequest(
+                                            friendshipId: friendship.id,
+                                            currentUserId: currentUserId,
+                                            otherUserId: userId,
+                                            currentUserName:
+                                                currentUserName, // ✅ FIX: Pass the current user's name
+                                          );
+                                      showFloatingSnackBar(
+                                        context,
+                                        'You are now friends with ${profile.name}!',
+                                      );
+                                    }
                                   },
                                   child: const Text('Accept Request'),
                                 );
@@ -268,14 +270,18 @@ class ViewProfileScreen extends ConsumerWidget {
                             // No friendship exists, show "Befriend" button
                             return FilledButton(
                               onPressed: () async {
-                                await friendshipRepository.sendFriendRequest(
-                                  senderId: currentUserId,
-                                  receiverId: userId,
-                                );
-                                showFloatingSnackBar(
-                                  context,
-                                  'Friend request sent to ${profile.name}.',
-                                );
+                                if (currentUserId != null) {
+                                  await friendshipRepository.sendFriendRequest(
+                                    senderId: currentUserId,
+                                    senderName:
+                                        currentUserName, // ✅ FIX: Pass the sender's name
+                                    receiverId: userId,
+                                  );
+                                  showFloatingSnackBar(
+                                    context,
+                                    'Friend request sent to ${profile.name}.',
+                                  );
+                                }
                               },
                               child: const Text('Befriend'),
                             );
@@ -297,15 +303,12 @@ class ViewProfileScreen extends ConsumerWidget {
 
                 // Main Content Card (Conditionally displayed if there's any detail)
                 if (hasDetailsContent) ...[
-                  const SizedBox(
-                    height: 24,
-                  ), // Spacing between header and content card
+                  const SizedBox(height: 24),
                   ProfileInfoCard(
-                    title: 'About & Connections', // A single, overarching title
+                    title: 'About & Connections',
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ... (Bio Section) ...
                         if (hasBio) ...[
                           Text(
                             profile.shortBio!,
@@ -319,7 +322,6 @@ class ViewProfileScreen extends ConsumerWidget {
                           ),
                           if (hasTags || hasSocial) const SizedBox(height: 16),
                         ],
-                        // ... (Interests Section) ...
                         if (hasTags) ...[
                           Text(
                             'Interests',
@@ -332,7 +334,6 @@ class ViewProfileScreen extends ConsumerWidget {
                           InterestsSection(tags: profile.tags!),
                           if (hasSocial) const SizedBox(height: 16),
                         ],
-                        // ... (Social Media Section) ...
                         if (hasSocial) ...[
                           Text(
                             'Social Media',
@@ -398,7 +399,6 @@ class ViewProfileScreen extends ConsumerWidget {
   ) {
     return InkWell(
       onTap: () {
-        // TODO: Implement opening social media links
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
