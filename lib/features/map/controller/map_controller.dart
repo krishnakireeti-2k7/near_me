@@ -155,15 +155,24 @@ final mapLocationProvider =
 
 final userLocationsProvider = StreamProvider<List<UserProfileModel>>((ref) {
   final authState = ref.watch(authStateProvider).asData?.value;
-  if (authState == null) {
+  final currentUserId = authState?.uid;
+
+  if (currentUserId == null) {
     return const Stream.empty();
   }
-  return FirebaseFirestore.instance.collection('users').snapshots().map((
-    snapshot,
-  ) {
-    return snapshot.docs
-        .map((doc) => UserProfileModel.fromMap(doc.data()))
-        .where((user) => user.location != null)
-        .toList();
-  });
+
+  // UPDATED: Filter out users with isGhostMode set to true
+  return FirebaseFirestore.instance
+      .collection('users')
+      .where('isGhostMode', isEqualTo: false)
+      .snapshots()
+      .map((snapshot) {
+        return snapshot.docs
+            .map((doc) => UserProfileModel.fromMap(doc.data()))
+            .where((user) => user.location != null)
+            .where(
+              (user) => user.uid != currentUserId,
+            ) // Exclude the current user from this list
+            .toList();
+      });
 });

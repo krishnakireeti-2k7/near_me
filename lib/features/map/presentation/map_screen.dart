@@ -148,25 +148,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-  Future<void> _updateMarkers(List<UserProfileModel> users) async {
+  Future<void> _updateMarkers({
+    required List<UserProfileModel> otherUsers,
+    required UserProfileModel? currentUserProfile,
+  }) async {
     final Set<Marker> newMarkers = {};
-    final currentUserId = ref.read(authStateProvider).value?.uid;
 
-    for (final user in users) {
-      // NEW LOGIC: Skip marker creation for the current user in ghost mode
-      if (user.uid == currentUserId && user.isGhostModeEnabled) {
-        continue;
-      }
-
+    // 1. Add markers for all other users (already filtered by the provider)
+    for (final user in otherUsers) {
       if (user.location != null &&
           user.location!.latitude != 0 &&
           user.location!.longitude != 0) {
         String? imageUrlToShow = user.profileImageUrl;
-        if (imageUrlToShow == null || imageUrlToShow.isEmpty) {
-          if (currentUserId != null && currentUserId == user.uid) {
-            imageUrlToShow = ref.read(authStateProvider).value?.photoURL;
-          }
-        }
 
         final bool isActive =
             user.lastActive != null &&
@@ -175,7 +168,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         final markerIcon = await _getCustomMarker(imageUrlToShow, isActive);
         newMarkers.add(
           Marker(
-            markerId: MarkerId(user.uid),
+            markerId: MarkerId(user.uid!),
             position: LatLng(user.location!.latitude, user.location!.longitude),
             icon: markerIcon,
             anchor: const Offset(0.5, 0.5),
@@ -192,6 +185,47 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         );
       }
     }
+
+    // 2. Add a separate marker for the current user (always visible to them)
+    if (currentUserProfile != null &&
+        currentUserProfile.location != null &&
+        currentUserProfile.location!.latitude != 0 &&
+        currentUserProfile.location!.longitude != 0) {
+      String? imageUrlToShow = currentUserProfile.profileImageUrl;
+      if (imageUrlToShow == null || imageUrlToShow.isEmpty) {
+        imageUrlToShow = ref.read(authStateProvider).value?.photoURL;
+      }
+
+      final bool isActive =
+          currentUserProfile.lastActive != null &&
+          DateTime.now()
+                  .difference(currentUserProfile.lastActive!.toDate())
+                  .inMinutes <=
+              5;
+
+      final markerIcon = await _getCustomMarker(imageUrlToShow, isActive);
+      newMarkers.add(
+        Marker(
+          markerId: MarkerId(currentUserProfile.uid!),
+          position: LatLng(
+            currentUserProfile.location!.latitude,
+            currentUserProfile.location!.longitude,
+          ),
+          icon: markerIcon,
+          anchor: const Offset(0.5, 0.5),
+          onTap: () {
+            showModalBottomSheet(
+              context: context,
+              builder: (_) => MiniProfileCard(user: currentUserProfile),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
     if (!mounted) return;
     setState(() {
       _markers = newMarkers;
@@ -368,7 +402,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           CameraUpdate.newCameraPosition(
             CameraPosition(
               target: LatLng(position.latitude, position.longitude),
-              zoom: 17,
+              zoom: 20,
             ),
           ),
         );
@@ -392,8 +426,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       extendBodyBehindAppBar: true,
       drawer: const MainDrawer(),
       body: userProfileAsyncValue.when(
-        data: (currentUser) {
-          if (currentUser == null) {
+        data: (currentUserProfile) {
+          if (currentUserProfile == null) {
             return const Center(
               child: Text("User profile not found. Please log in again."),
             );
@@ -406,17 +440,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           return userLocationsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, _) => Center(child: Text('Error loading users: $err')),
-            data: (users) {
-              _updateMarkers(users);
+            data: (otherUsers) {
+              // Pass both the list of other users and the current user's profile
+              // to the marker update method.
+              _updateMarkers(
+                otherUsers: otherUsers,
+                currentUserProfile: currentUserProfile,
+              );
               final LatLng cameraTarget;
               if (_isLocationPermissionGranted &&
                   _isLocationServiceEnabled &&
-                  currentUser.location != null &&
-                  currentUser.location!.latitude != 0 &&
-                  currentUser.location!.longitude != 0) {
+                  currentUserProfile.location != null &&
+                  currentUserProfile.location!.latitude != 0 &&
+                  currentUserProfile.location!.longitude != 0) {
                 cameraTarget = LatLng(
-                  currentUser.location!.latitude,
-                  currentUser.location!.longitude,
+                  currentUserProfile.location!.latitude,
+                  currentUserProfile.location!.longitude,
                 );
               } else {
                 cameraTarget = _defaultLocation;
