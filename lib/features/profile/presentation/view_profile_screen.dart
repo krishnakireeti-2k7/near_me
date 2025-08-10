@@ -13,6 +13,11 @@ import 'package:timeago/timeago.dart' as timeago;
 // Import the essential reusable widget
 import 'package:near_me/widgets/profile_info_card.dart'; // Ensure this file exists and contains ProfileInfoCard
 
+// ✅ NEW IMPORTS for Friendship Feature
+import 'package:near_me/features/profile/repository/friendship_repository_provider.dart';
+import 'package:near_me/features/profile/model/friendship_model.dart';
+import 'package:near_me/features/profile/repository/friendship_repository.dart';
+
 class ViewProfileScreen extends ConsumerWidget {
   final String userId;
   final bool isCurrentUser;
@@ -27,6 +32,13 @@ class ViewProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(userProfileProvider(userId));
     final theme = Theme.of(context);
+
+    // ✅ NEW: Watch the friendship status
+    final friendshipStatusAsync = ref.watch(
+      friendshipStatusStreamProvider(userId),
+    );
+    final currentUserId =
+        ref.watch(currentUserProfileStreamProvider).value?.uid;
 
     return profileAsync.when(
       data: (profile) {
@@ -100,18 +112,8 @@ class ViewProfileScreen extends ConsumerWidget {
                     context.push('/edit-profile/${profile.uid}');
                   },
                 ),
-              if (!isCurrentUser) // Example: Message button for other users
-                IconButton(
-                  icon: const Icon(Icons.message_rounded),
-                  color: theme.colorScheme.primary,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Chat feature coming soon!'),
-                      ),
-                    );
-                  },
-                ),
+              // We'll place the Befriend button logic in the body to be more prominent
+              // if (!isCurrentUser) ... (old message button removed to avoid clutter)
             ],
           ),
           body: SingleChildScrollView(
@@ -164,8 +166,7 @@ class ViewProfileScreen extends ConsumerWidget {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 6),
-                      // --- MODIFIED SECTION START ---
-                      if (!isCurrentUser) // If NOT the current user, show last active status
+                      if (!isCurrentUser)
                         Text(
                           lastActiveText,
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -174,19 +175,122 @@ class ViewProfileScreen extends ConsumerWidget {
                           ),
                           textAlign: TextAlign.center,
                         )
-                      else // If it IS the current user, show a custom message
+                      else
                         Text(
-                          'Your Profile', // You can change this text to something like 'This is you!' or 'Active now' if you prefer
+                          'Your Profile',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color:
-                                theme
-                                    .colorScheme
-                                    .primary, // Using primary color for emphasis
+                            color: theme.colorScheme.primary,
                             fontStyle: FontStyle.italic,
                           ),
                           textAlign: TextAlign.center,
                         ),
-                      // --- MODIFIED SECTION END ---
+
+                      // ✅ NEW: Add the friendship button below the profile info
+                      if (!isCurrentUser && currentUserId != null) ...[
+                        const SizedBox(height: 24),
+                        friendshipStatusAsync.when(
+                          data: (friendship) {
+                            final friendshipRepository = ref.read(
+                              friendshipRepositoryProvider,
+                            );
+
+                            // The user is already a friend
+                            if (friendship != null &&
+                                friendship.status ==
+                                    FriendshipStatus.accepted) {
+                              return FilledButton.tonal(
+                                onPressed: () async {
+                                  // Add an "Unfriend" feature here
+                                  showDialog(
+                                    context: context,
+                                    builder:
+                                        (ctx) => AlertDialog(
+                                          title: const Text('Unfriend'),
+                                          content: Text(
+                                            'Are you sure you want to unfriend ${profile.name}?',
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed:
+                                                  () => Navigator.of(ctx).pop(),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            FilledButton(
+                                              onPressed: () async {
+                                                await friendshipRepository
+                                                    .unfriend(
+                                                      user1Id: currentUserId,
+                                                      user2Id: userId,
+                                                    );
+                                                Navigator.of(ctx).pop();
+                                                showFloatingSnackBar(
+                                                  context,
+                                                  'You have unfriended ${profile.name}.',
+                                                );
+                                              },
+                                              child: const Text('Unfriend'),
+                                            ),
+                                          ],
+                                        ),
+                                  );
+                                },
+                                child: const Text('Friends'),
+                              );
+                            }
+
+                            // A request is pending
+                            if (friendship != null &&
+                                friendship.status == FriendshipStatus.pending) {
+                              if (friendship.user1Id == currentUserId) {
+                                return FilledButton.tonal(
+                                  onPressed: null,
+                                  child: const Text('Request Sent'),
+                                );
+                              } else {
+                                return FilledButton(
+                                  onPressed: () async {
+                                    await friendshipRepository
+                                        .acceptFriendRequest(
+                                          friendshipId: friendship.id,
+                                          currentUserId: currentUserId,
+                                          otherUserId: userId,
+                                        );
+                                    showFloatingSnackBar(
+                                      context,
+                                      'You are now friends with ${profile.name}!',
+                                    );
+                                  },
+                                  child: const Text('Accept Request'),
+                                );
+                              }
+                            }
+
+                            // No friendship exists, show "Befriend" button
+                            return FilledButton(
+                              onPressed: () async {
+                                await friendshipRepository.sendFriendRequest(
+                                  senderId: currentUserId,
+                                  receiverId: userId,
+                                );
+                                showFloatingSnackBar(
+                                  context,
+                                  'Friend request sent to ${profile.name}.',
+                                );
+                              },
+                              child: const Text('Befriend'),
+                            );
+                          },
+                          loading:
+                              () => const SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                          error: (_, __) => const SizedBox.shrink(),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -199,15 +303,13 @@ class ViewProfileScreen extends ConsumerWidget {
                   ProfileInfoCard(
                     title: 'About & Connections', // A single, overarching title
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment
-                              .start, // Align content within the card
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Bio Section (inside the main card)
+                        // ... (Bio Section) ...
                         if (hasBio) ...[
                           Text(
                             profile.shortBio!,
-                            textAlign: TextAlign.center, // Center bio text
+                            textAlign: TextAlign.center,
                             style: theme.textTheme.bodyLarge?.copyWith(
                               color: theme.colorScheme.onSurface.withOpacity(
                                 0.8,
@@ -215,14 +317,12 @@ class ViewProfileScreen extends ConsumerWidget {
                               height: 1.5,
                             ),
                           ),
-                          // Add divider/spacing if there are more sections below
                           if (hasTags || hasSocial) const SizedBox(height: 16),
                         ],
-
-                        // Interests Section (inside the main card)
+                        // ... (Interests Section) ...
                         if (hasTags) ...[
                           Text(
-                            'Interests', // Sub-title for interests
+                            'Interests',
                             style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: theme.colorScheme.onSurface,
@@ -230,14 +330,12 @@ class ViewProfileScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 8),
                           InterestsSection(tags: profile.tags!),
-                          // Add divider/spacing if there are more sections below
                           if (hasSocial) const SizedBox(height: 16),
                         ],
-
-                        // Social Media Section (inside the main card)
+                        // ... (Social Media Section) ...
                         if (hasSocial) ...[
                           Text(
-                            'Social Media', // Sub-title for social media
+                            'Social Media',
                             style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: theme.colorScheme.onSurface,
@@ -272,9 +370,7 @@ class ViewProfileScreen extends ConsumerWidget {
                     ),
                   ),
                 ],
-                const SizedBox(
-                  height: 24,
-                ), // More space at the bottom for scrolling
+                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -293,7 +389,6 @@ class ViewProfileScreen extends ConsumerWidget {
     );
   }
 
-  // Private helper method for building social links (reverted from separate widget)
   Widget _buildSocialLink(
     BuildContext context,
     String platform,

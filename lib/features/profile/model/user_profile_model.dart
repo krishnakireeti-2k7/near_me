@@ -15,7 +15,8 @@ class UserProfileModel {
   final Timestamp? lastActive;
   final String? fcmToken;
   final int totalInterestsCount;
-  final bool isGhostModeEnabled; // NEW FIELD
+  final bool isGhostModeEnabled;
+  final List<String> friends; // ✅ NEW FIELD
 
   UserProfileModel({
     required this.uid,
@@ -29,7 +30,8 @@ class UserProfileModel {
     this.lastActive,
     this.fcmToken,
     this.totalInterestsCount = 0,
-    this.isGhostModeEnabled = false, // NEW: Default to false
+    this.isGhostModeEnabled = false,
+    this.friends = const [], // ✅ NEW: Default to empty list
   });
 
   Map<String, dynamic> toMap() {
@@ -45,7 +47,8 @@ class UserProfileModel {
       'lastActive': lastActive,
       'fcmToken': fcmToken,
       'totalInterestsCount': totalInterestsCount,
-      'isGhostModeEnabled': isGhostModeEnabled, // NEW
+      'isGhostModeEnabled': isGhostModeEnabled,
+      'friends': friends, // ✅ NEW
     };
   }
 
@@ -65,7 +68,11 @@ class UserProfileModel {
       lastActive: map['lastActive'] as Timestamp?,
       fcmToken: map['fcmToken'] as String?,
       totalInterestsCount: map['totalInterestsCount'] as int? ?? 0,
-      isGhostModeEnabled: map['isGhostModeEnabled'] as bool? ?? false, // NEW
+      isGhostModeEnabled: map['isGhostModeEnabled'] as bool? ?? false,
+      friends:
+          map['friends'] != null
+              ? List<String>.from(map['friends'])
+              : [], // ✅ NEW: Handle null for older documents
     );
   }
 
@@ -82,7 +89,8 @@ class UserProfileModel {
       lastActive: null,
       fcmToken: null,
       totalInterestsCount: 0,
-      isGhostModeEnabled: false, // NEW
+      isGhostModeEnabled: false,
+      friends: const [], // ✅ NEW
     );
   }
 
@@ -98,7 +106,8 @@ class UserProfileModel {
     Timestamp? lastActive,
     String? fcmToken,
     int? totalInterestsCount,
-    bool? isGhostModeEnabled, // NEW
+    bool? isGhostModeEnabled,
+    List<String>? friends, // ✅ NEW
   }) {
     return UserProfileModel(
       uid: uid ?? this.uid,
@@ -112,7 +121,8 @@ class UserProfileModel {
       lastActive: lastActive ?? this.lastActive,
       fcmToken: fcmToken ?? this.fcmToken,
       totalInterestsCount: totalInterestsCount ?? this.totalInterestsCount,
-      isGhostModeEnabled: isGhostModeEnabled ?? this.isGhostModeEnabled, // NEW
+      isGhostModeEnabled: isGhostModeEnabled ?? this.isGhostModeEnabled,
+      friends: friends ?? this.friends, // ✅ NEW
     );
   }
 }

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:near_me/features/map/controller/map_controller.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
@@ -12,6 +13,10 @@ import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/services/local_interests_service.dart';
 import 'package:near_me/widgets/themed_switch_list_tile.dart';
+
+import 'package:near_me/features/profile/repository/friendship_repository_provider.dart';
+import 'package:near_me/features/profile/model/friendship_model.dart';
+import 'package:near_me/features/profile/repository/friendship_repository.dart';
 
 // Maximum daily interests allowed
 const int maxDailyInterests = 10;
@@ -101,9 +106,97 @@ class MiniProfileCard extends ConsumerWidget {
               ),
             const SizedBox(height: 12),
           ],
+          // ✅ FIX: This entire block should only be rendered when the user is NOT the current user.
           if (currentUser != null && !isCurrentUser)
             Column(
               children: [
+                Consumer(
+                  builder: (context, ref, child) {
+                    final friendshipStatusAsync = ref.watch(
+                      friendshipStatusStreamProvider(user.uid),
+                    );
+                    final friendshipRepository = ref.read(
+                      friendshipRepositoryProvider,
+                    );
+                    final currentUserId =
+                        ref.watch(currentUserProfileStreamProvider).value?.uid;
+
+                    // ✅ FIXED LOGIC: Correctly determine sender/receiver
+                    return friendshipStatusAsync.when(
+                      data: (friendship) {
+                        // Case 1: Friendship is already accepted
+                        if (friendship != null &&
+                            friendship.status == FriendshipStatus.accepted) {
+                          return SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.tonal(
+                              onPressed: null,
+                              child: const Text('Friends'),
+                            ),
+                          );
+                        }
+                        // Case 2: A pending request exists
+                        else if (friendship != null &&
+                            friendship.status == FriendshipStatus.pending) {
+                          // Check if the current user is the one who SENT the request
+                          if (friendship.senderId == currentUserId) {
+                            return SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.tonal(
+                                onPressed: null,
+                                child: const Text('Request Sent'),
+                              ),
+                            );
+                          }
+                          // Check if the current user is the one who RECEIVED the request
+                          else if (friendship.senderId != currentUserId) {
+                            return SizedBox(
+                              width: double.infinity,
+                              child: FilledButton(
+                                onPressed: () async {
+                                  if (currentUserId != null) {
+                                    await friendshipRepository
+                                        .acceptFriendRequest(
+                                          friendshipId: friendship.id,
+                                          currentUserId: currentUserId,
+                                          otherUserId: user.uid,
+                                        );
+                                  }
+                                },
+                                child: const Text('Accept Request'),
+                              ),
+                            );
+                          }
+                        }
+                        // Case 3: No friendship or request exists
+                        return SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () async {
+                              if (currentUserId != null) {
+                                await friendshipRepository.sendFriendRequest(
+                                  senderId: currentUserId,
+                                  receiverId: user.uid,
+                                );
+                              }
+                            },
+                            child: const Text('Befriend'),
+                          ),
+                        );
+                      },
+                      loading:
+                          () => const Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                      error: (err, stack) => const SizedBox.shrink(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: DecoratedBox(
@@ -196,22 +289,20 @@ class MiniProfileCard extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       onPressed: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder:
-                                (ctx) => ViewProfileScreen(
-                                  userId: user.uid,
-                                  isCurrentUser: false,
-                                ),
-                          ),
-                        );
+                        // ✅ FIXED: Use the router to navigate to the full profile page.
+                        // This assumes your router has a path like '/profile/:userId'
+                        // and you need to pass the user's UID.
+                        Navigator.of(
+                          context,
+                        ).pop(); // Close the mini-card first
+                        context.push('/profile/${user.uid}');
                       },
                     ),
                   ),
                 ),
               ],
             ),
+          // Your existing code for the current user's profile card
           if (isCurrentUser)
             Column(
               children: [
