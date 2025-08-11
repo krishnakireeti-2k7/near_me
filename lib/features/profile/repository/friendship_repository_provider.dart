@@ -29,7 +29,7 @@ final pendingFriendRequestsProvider = StreamProvider<List<FriendshipModel>>((
       .getPendingFriendRequestsStream(currentUser!.uid);
 });
 
-// ✅ NEW: A provider that gives you the count of pending friend requests.
+// A provider that gives you the total count of pending friend requests.
 final pendingFriendRequestsCountProvider = StreamProvider<int>((ref) {
   return ref
       .watch(pendingFriendRequestsProvider)
@@ -38,6 +38,28 @@ final pendingFriendRequestsCountProvider = StreamProvider<int>((ref) {
         loading: () => Stream.value(0),
         error: (_, __) => Stream.value(0),
       );
+});
+
+// ✅ NEW: Direct Firestore query for daily pending requests count
+final dailyFriendRequestsCountProvider = StreamProvider<int>((ref) {
+  final currentUser = ref.watch(authStateProvider).value;
+  if (currentUser == null) {
+    return const Stream.empty();
+  }
+
+  final now = DateTime.now();
+  final startOfDay = DateTime(now.year, now.month, now.day);
+
+  return FirebaseFirestore.instance
+      .collection('friendships')
+      .where('user2Id', isEqualTo: currentUser.uid) // only incoming requests
+      .where('status', isEqualTo: FriendshipStatus.pending.name)
+      .where(
+        'timestamp',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+      )
+      .snapshots()
+      .map((snapshot) => snapshot.size);
 });
 
 // Provides a stream of the friendship status between the current user and another user.

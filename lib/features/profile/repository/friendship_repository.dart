@@ -153,9 +153,6 @@ class FriendshipRepository {
         });
   }
 
-  // ✅ FIX: This method is updated to correctly query for all pending requests
-  //        where the current user is the receiver, regardless of whether their ID is
-  //        in user1Id or user2Id.
   Stream<List<FriendshipModel>> getPendingFriendRequestsStream(
     String currentUserId,
   ) {
@@ -167,11 +164,37 @@ class FriendshipRepository {
           return snapshot.docs
               .where((doc) {
                 final data = doc.data();
-                // Check if the current user is the receiver (not the sender)
                 return (data['user1Id'] == currentUserId ||
                         data['user2Id'] == currentUserId) &&
                     data['senderId'] != currentUserId;
               })
+              .map((doc) => FriendshipModel.fromMap(doc.data()))
+              .toList();
+        });
+  }
+
+  // ✅ NEW METHOD: Gets the count of pending friend requests from today.
+  Stream<List<FriendshipModel>> getDailyPendingFriendRequestsStream(
+    String currentUserId,
+  ) {
+    // Get the timestamp for the start of today
+    final startOfToday = DateTime.now().copyWith(
+      hour: 0,
+      minute: 0,
+      second: 0,
+      millisecond: 0,
+      microsecond: 0,
+    );
+    final startOfTodayTimestamp = Timestamp.fromDate(startOfToday);
+
+    return _firestore
+        .collection('friendships')
+        .where('user2Id', isEqualTo: currentUserId) // 👈 This is the key change
+        .where('status', isEqualTo: FriendshipStatus.pending.name)
+        .where('timestamp', isGreaterThanOrEqualTo: startOfTodayTimestamp)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
               .map((doc) => FriendshipModel.fromMap(doc.data()))
               .toList();
         });

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_google_maps_webservices/places.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:near_me/features/map/widgets/daily_friend_request_counter_widget.dart';
 import 'package:near_me/features/map/widgets/mini_profile_card.dart';
 import 'package:near_me/features/map/widgets/search_bar_widget.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
@@ -22,9 +23,6 @@ import 'package:near_me/widgets/main_drawer.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:near_me/features/map/widgets/daily_interests_counter_widget.dart';
-
-
-// Import the LocationService
 import 'package:near_me/services/location_service.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
@@ -46,21 +44,56 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   static const LatLng _defaultLocation = LatLng(37.7749, -122.4194);
 
-  // No longer need to manually manage the controller or timer
-  // The MapLocationNotifier will handle cleanup automatically
-  // late final MapController _mapControllerInstanceForCleanup;
+  late final ProviderSubscription _disposeUserProfileListener;
+  late final ProviderSubscription _disposeUserLocationsListener;
+  late final ProviderSubscription _disposeAuthStateListener;
 
   @override
   void initState() {
     super.initState();
-    // Start location updates as soon as the user is authenticated.
     _startLocationUpdatesIfPermitted(ref.read(authStateProvider).value);
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (mounted) {
+      _disposeAuthStateListener = ref.listenManual<AsyncValue<User?>>(
+        authStateProvider,
+        (previous, next) {
+          if (next.hasValue && next.value != null) {
+            _startLocationUpdatesIfPermitted(next.value);
+          }
+        },
+        fireImmediately: true,
+      );
+
+      _disposeUserProfileListener = ref.listenManual<
+        AsyncValue<UserProfileModel?>
+      >(currentUserProfileStreamProvider, (previous, next) {
+        _updateMarkers(
+          otherUsers: ref.read(profile_repo.userLocationsProvider).value ?? [],
+          currentUserProfile: next.value,
+        );
+      }, fireImmediately: true);
+
+      _disposeUserLocationsListener = ref.listenManual<
+        AsyncValue<List<UserProfileModel>>
+      >(profile_repo.userLocationsProvider, (previous, next) {
+        _updateMarkers(
+          otherUsers: next.value ?? [],
+          currentUserProfile: ref.read(currentUserProfileStreamProvider).value,
+        );
+      }, fireImmediately: true);
+    }
+  }
+
+  @override
   void dispose() {
-    // We no longer need to manually call stopLocationUpdates()
-    // The MapLocationNotifier's dispose method will handle timer cleanup.
+    _disposeUserProfileListener.close();
+    _disposeUserLocationsListener.close();
+    _disposeAuthStateListener.close();
     super.dispose();
   }
 
@@ -111,7 +144,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _updateLocationStatus(isPermissionGranted: true, message: null);
     _goToCurrentLocationAndRecenter();
 
-    // CORRECTED: Use the new mapLocationProvider to start updates
     ref.read(mapLocationProvider.notifier).setUserId(currentUser.uid);
     ref.read(mapLocationProvider.notifier).toggleLocationSharing(true);
   }
@@ -154,13 +186,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }) async {
     final Set<Marker> newMarkers = {};
 
-    // 1. Add markers for all other users (already filtered by the provider)
     for (final user in otherUsers) {
       if (user.location != null &&
           user.location!.latitude != 0 &&
           user.location!.longitude != 0) {
         String? imageUrlToShow = user.profileImageUrl;
-
         final bool isActive =
             user.lastActive != null &&
             DateTime.now().difference(user.lastActive!.toDate()).inMinutes <= 5;
@@ -186,7 +216,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
     }
 
-    // 2. Add a separate marker for the current user (always visible to them)
     if (currentUserProfile != null &&
         currentUserProfile.location != null &&
         currentUserProfile.location!.latitude != 0 &&
@@ -365,9 +394,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
-  void _onPlaceSelected(Prediction place) async {
-    // This method is now handled by the SearchBarWidget.
-  }
+  void _onPlaceSelected(Prediction place) async {}
 
   void _animateCameraToUserLocation(GeoPoint? location) {
     final mapController = ref.read(googleMapControllerProvider);
@@ -414,155 +441,136 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userProfileAsyncValue = ref.watch(currentUserProfileStreamProvider);
+    final currentUserProfile =
+        ref.watch(currentUserProfileStreamProvider).value;
+    final userLocations =
+        ref.watch(profile_repo.userLocationsProvider).value ?? [];
 
-    ref.listen<AsyncValue<User?>>(authStateProvider, (previous, next) {
-      if (next.hasValue && next.value != null) {
-        _startLocationUpdatesIfPermitted(next.value);
-      }
-    });
+    if (currentUserProfile == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final LatLng cameraTarget;
+    if (_isLocationPermissionGranted &&
+        _isLocationServiceEnabled &&
+        currentUserProfile.location != null &&
+        currentUserProfile.location!.latitude != 0 &&
+        currentUserProfile.location!.longitude != 0) {
+      cameraTarget = LatLng(
+        currentUserProfile.location!.latitude,
+        currentUserProfile.location!.longitude,
+      );
+    } else {
+      cameraTarget = _defaultLocation;
+    }
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       drawer: const MainDrawer(),
-      body: userProfileAsyncValue.when(
-        data: (currentUserProfile) {
-          if (currentUserProfile == null) {
-            return const Center(
-              child: Text("User profile not found. Please log in again."),
-            );
-          }
-
-          final userLocationsAsync = ref.watch(
-            profile_repo.userLocationsProvider,
-          );
-
-          return userLocationsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => Center(child: Text('Error loading users: $err')),
-            data: (otherUsers) {
-              // Pass both the list of other users and the current user's profile
-              // to the marker update method.
-              _updateMarkers(
-                otherUsers: otherUsers,
-                currentUserProfile: currentUserProfile,
-              );
-              final LatLng cameraTarget;
-              if (_isLocationPermissionGranted &&
-                  _isLocationServiceEnabled &&
-                  currentUserProfile.location != null &&
-                  currentUserProfile.location!.latitude != 0 &&
-                  currentUserProfile.location!.longitude != 0) {
-                cameraTarget = LatLng(
-                  currentUserProfile.location!.latitude,
-                  currentUserProfile.location!.longitude,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: GoogleMap(
+              onMapCreated: (controller) async {
+                final mapControllerNotifier = ref.read(
+                  googleMapControllerProvider.notifier,
                 );
-              } else {
-                cameraTarget = _defaultLocation;
-              }
+                mapControllerNotifier.setController(controller);
 
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: GoogleMap(
-                      onMapCreated: (controller) async {
-                        final mapControllerNotifier = ref.read(
-                          googleMapControllerProvider.notifier,
-                        );
-                        mapControllerNotifier.setController(controller);
-
-                        try {
-                          final jsonString = await rootBundle.loadString(
-                            'assets/map_style.json',
-                          );
-                          await controller.setMapStyle(jsonString);
-                          if (_isLocationPermissionGranted &&
-                              _isLocationServiceEnabled) {
-                            _goToCurrentLocationAndRecenter();
-                          } else {
-                            controller.animateCamera(
-                              CameraUpdate.newLatLngZoom(_defaultLocation, 19),
-                            );
-                          }
-                        } catch (e) {
-                          debugPrint('Failed to load map style: $e');
-                        }
-                      },
-                      initialCameraPosition: CameraPosition(
-                        target: cameraTarget,
-                        zoom: 19,
-                      ),
-                      markers: _markers,
-                      myLocationEnabled: _isLocationPermissionGranted,
-                      myLocationButtonEnabled: false,
-                      zoomControlsEnabled: true,
-                    ),
-                  ),
-
-                  if (_isSearchResultsVisible)
-                    Positioned.fill(
-                      child: GestureDetector(
-                        onTap: () {
-                          FocusScope.of(context).unfocus();
-                          _searchBarKey.currentState?.clearSuggestions();
-                          setState(() {
-                            _isSearchResultsVisible = false;
-                          });
-                        },
-                        child: Container(color: Colors.black.withOpacity(0.0)),
-                      ),
-                    ),
-
-                  Positioned(
-                    top: 50,
-                    left: 20,
-                    right: 20,
-                    child: Builder(
-                      builder: (context) {
-                        return SearchBarWidget(
-                          key: _searchBarKey,
-                          scaffoldContext: context,
-                          onPlaceSelected: (location) {
-                            _handlePlaceSelected(location);
-                            _searchBarKey.currentState?.clearSuggestions();
-                            setState(() {
-                              _isSearchResultsVisible = false;
-                            });
-                          },
-                          onUserSearch: (query) {
-                            // TODO: Implement user search logic here.
-                          },
-                          onSearchToggled: (isVisible) {
-                            setState(() {
-                              _isSearchResultsVisible = isVisible;
-                            });
-                          },
-                        );
-                      },
-                    ),
-                  ),
-
-                  Positioned(
-                    top: 130,
-                    right: 20,
-                    child: FloatingActionButton(
-                      heroTag: 'locationButton',
-                      onPressed: _goToCurrentLocationAndRecenter,
-                      child: const Icon(Icons.my_location),
-                    ),
-                  ),
-                  Positioned(
-                    top: 130,
-                    left: 20,
-                    child: DailyInterestsCounterWidget(),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading profile: $err')),
+                try {
+                  final jsonString = await rootBundle.loadString(
+                    'assets/map_style.json',
+                  );
+                  await controller.setMapStyle(jsonString);
+                  if (_isLocationPermissionGranted &&
+                      _isLocationServiceEnabled) {
+                    _goToCurrentLocationAndRecenter();
+                  } else {
+                    controller.animateCamera(
+                      CameraUpdate.newLatLngZoom(_defaultLocation, 19),
+                    );
+                  }
+                } catch (e) {
+                  debugPrint('Failed to load map style: $e');
+                }
+              },
+              initialCameraPosition: CameraPosition(
+                target: cameraTarget,
+                zoom: 19,
+              ),
+              markers: _markers,
+              myLocationEnabled: _isLocationPermissionGranted,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: true,
+            ),
+          ),
+          if (_isSearchResultsVisible)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () {
+                  FocusScope.of(context).unfocus();
+                  _searchBarKey.currentState?.clearSuggestions();
+                  setState(() {
+                    _isSearchResultsVisible = false;
+                  });
+                },
+                child: Container(color: Colors.black.withOpacity(0.0)),
+              ),
+            ),
+          Positioned(
+            top: 50,
+            left: 20,
+            right: 20,
+            child: Builder(
+              builder: (context) {
+                return SearchBarWidget(
+                  key: _searchBarKey,
+                  scaffoldContext: context,
+                  onPlaceSelected: (location) {
+                    _handlePlaceSelected(location);
+                    _searchBarKey.currentState?.clearSuggestions();
+                    setState(() {
+                      _isSearchResultsVisible = false;
+                    });
+                  },
+                  onUserSearch: (query) {
+                    // TODO: Implement user search logic here.
+                  },
+                  onSearchToggled: (isVisible) {
+                    setState(() {
+                      _isSearchResultsVisible = isVisible;
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+          Positioned(
+            top: 130,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: 'locationButton',
+              onPressed: _goToCurrentLocationAndRecenter,
+              child: const Icon(Icons.my_location),
+            ),
+          ),
+          // ✅ FIX: Use a Consumer to prevent full screen reload
+          Positioned(
+            top: 130,
+            left: 20,
+            child: Consumer(
+              builder: (context, ref, child) {
+                return Row(
+                  children: const [
+                    DailyInterestsCounterWidget(),
+                    SizedBox(width: 10), // Add spacing between the widgets
+                    DailyFriendRequestsCounterWidget(), // ✅ NEW: The new counter widget
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
