@@ -3,17 +3,21 @@
 import 'package:flutter/material.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:near_me/features/profile/model/friendship_model.dart';
 
 class MiniProfileHeader extends StatelessWidget {
   final UserProfileModel user;
   final bool isCurrentUser;
   final String? imageUrlToShow;
+  final AsyncValue<FriendshipModel?>? friendshipStatus;
 
   const MiniProfileHeader({
     super.key,
     required this.user,
     required this.isCurrentUser,
     required this.imageUrlToShow,
+    this.friendshipStatus,
   });
 
   @override
@@ -30,7 +34,8 @@ class MiniProfileHeader extends StatelessWidget {
     }
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      // ✅ FIX: Use CrossAxisAlignment.center for better vertical alignment
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         CircleAvatar(
           radius: 28,
@@ -50,8 +55,8 @@ class MiniProfileHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
+                // ✅ FIX: Use CrossAxisAlignment.center here as well for the name and chip
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Flexible(
                     child: Text(
@@ -63,23 +68,32 @@ class MiniProfileHeader extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6), // ✅ FIX: Reduced spacing
+                  // ✅ FIX: Use a consistent Chip widget for both states
                   if (isCurrentUser)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
+                    Chip(
+                      label: const Text('You', style: TextStyle(fontSize: 11)),
+                      backgroundColor: Theme.of(
+                        context,
+                      ).primaryColor.withOpacity(0.1),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  if (!isCurrentUser &&
+                      friendshipStatus?.value?.status ==
+                          FriendshipStatus.accepted)
+                    Chip(
+                      label: const Text(
+                        'Friends',
+                        style: TextStyle(fontSize: 11),
                       ),
-                      decoration: BoxDecoration(
-                        color: Colors.blueGrey[50],
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        'You',
-                        style: TextStyle(
-                          color: Colors.blueGrey[400],
-                          fontSize: 11,
-                        ),
+                      backgroundColor: Colors.green.shade100,
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      visualDensity: VisualDensity.compact,
+                      avatar: const Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                        size: 14,
                       ),
                     ),
                 ],

@@ -47,6 +47,11 @@ class MiniProfileCard extends ConsumerWidget {
       end: Alignment.centerLeft,
     );
 
+    // ✅ Keep the provider watch here
+    final friendshipStatusAsync = ref.watch(
+      friendshipStatusStreamProvider(user.uid),
+    );
+
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
@@ -64,10 +69,12 @@ class MiniProfileCard extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ✅ PASS THE FRIENDSHIP STATUS TO THE HEADER
           MiniProfileHeader(
             user: user,
             isCurrentUser: isCurrentUser,
             imageUrlToShow: imageUrlToShow,
+            friendshipStatus: friendshipStatusAsync,
           ),
           const SizedBox(height: 12),
           if (user.tags.isNotEmpty) ...[
@@ -108,11 +115,8 @@ class MiniProfileCard extends ConsumerWidget {
           if (currentUser != null && !isCurrentUser)
             Column(
               children: [
-                Consumer(
-                  builder: (context, ref, child) {
-                    final friendshipStatusAsync = ref.watch(
-                      friendshipStatusStreamProvider(user.uid),
-                    );
+                friendshipStatusAsync.when(
+                  data: (friendship) {
                     final friendshipRepository = ref.read(
                       friendshipRepositoryProvider,
                     );
@@ -121,65 +125,32 @@ class MiniProfileCard extends ConsumerWidget {
                     final currentUserId = currentUserProfile?.uid;
                     final currentUserName = currentUserProfile?.name ?? '';
 
-                    return friendshipStatusAsync.when(
-                      data: (friendship) {
-                        if (friendship != null &&
-                            friendship.status == FriendshipStatus.accepted) {
-                          return SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.tonal(
-                              onPressed: null,
-                              child: const Text('Friends'),
-                            ),
-                          );
-                        } else if (friendship != null &&
-                            friendship.status == FriendshipStatus.pending) {
-                          if (friendship.senderId == currentUserId) {
-                            return SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.tonal(
-                                onPressed: null,
-                                child: const Text('Request Sent'),
-                              ),
-                            );
-                          } else {
-                            return SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                onPressed: () async {
-                                  if (currentUserId != null &&
-                                      currentUserName.isNotEmpty) {
-                                    await friendshipRepository
-                                        .acceptFriendRequest(
-                                          friendshipId: friendship.id,
-                                          currentUserId: currentUserId,
-                                          otherUserId: user.uid,
-                                          currentUserName: currentUserName,
-                                        );
-                                  } else {
-                                    showFloatingSnackBar(
-                                      context,
-                                      'Your profile is not fully loaded. Please wait a moment.',
-                                      isError: true,
-                                    );
-                                  }
-                                },
-                                child: const Text('Accept Request'),
-                              ),
-                            );
-                          }
-                        }
+                    // ✅ FIX: Only show the action buttons if not friends
+                    if (friendship != null &&
+                        friendship.status == FriendshipStatus.accepted) {
+                      return const SizedBox.shrink(); // No buttons needed if already friends
+                    } else if (friendship != null &&
+                        friendship.status == FriendshipStatus.pending) {
+                      if (friendship.senderId == currentUserId) {
+                        return SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.tonal(
+                            onPressed: null,
+                            child: const Text('Request Sent'),
+                          ),
+                        );
+                      } else {
                         return SizedBox(
                           width: double.infinity,
                           child: FilledButton(
                             onPressed: () async {
-                              // ✅ The corrected logic
                               if (currentUserId != null &&
                                   currentUserName.isNotEmpty) {
-                                await friendshipRepository.sendFriendRequest(
-                                  senderId: currentUserId,
-                                  senderName: currentUserName,
-                                  receiverId: user.uid,
+                                await friendshipRepository.acceptFriendRequest(
+                                  friendshipId: friendship.id,
+                                  currentUserId: currentUserId,
+                                  otherUserId: user.uid,
+                                  currentUserName: currentUserName,
                                 );
                               } else {
                                 showFloatingSnackBar(
@@ -189,87 +160,140 @@ class MiniProfileCard extends ConsumerWidget {
                                 );
                               }
                             },
-                            child: const Text('Befriend'),
+                            child: const Text('Accept Request'),
                           ),
                         );
-                      },
-                      loading:
-                          () => const Center(
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                      }
+                    }
+
+                    // The old 'Befriend' and 'Interested' buttons are now wrapped in a single widget
+                    // so they can be easily hidden.
+                    return Column(
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: Consumer(
+                            builder: (context, ref, child) {
+                              final friendshipRepository = ref.read(
+                                friendshipRepositoryProvider,
+                              );
+                              final currentUserProfile =
+                                  ref
+                                      .watch(currentUserProfileStreamProvider)
+                                      .value;
+                              final currentUserId = currentUserProfile?.uid;
+                              final currentUserName =
+                                  currentUserProfile?.name ?? '';
+
+                              return FilledButton(
+                                onPressed: () async {
+                                  if (currentUserId != null &&
+                                      currentUserName.isNotEmpty) {
+                                    await friendshipRepository
+                                        .sendFriendRequest(
+                                          senderId: currentUserId,
+                                          senderName: currentUserName,
+                                          receiverId: user.uid,
+                                        );
+                                  } else {
+                                    showFloatingSnackBar(
+                                      context,
+                                      'Your profile is not fully loaded. Please wait a moment.',
+                                      isError: true,
+                                    );
+                                  }
+                                },
+                                child: const Text('Befriend'),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: reversedGradient,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: ElevatedButton.icon(
+                              icon: const Text(
+                                '🔥',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  shadows: [
+                                    Shadow(
+                                      blurRadius: 2.0,
+                                      color: Colors.black,
+                                      offset: Offset(0.8, 0.8),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              label: const Text(
+                                'Interested',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              onPressed: () async {
+                                final localInterestsService = ref.read(
+                                  localInterestsServiceProvider,
+                                );
+                                final profileRepo = ref.read(
+                                  profileRepositoryProvider,
+                                );
+                                final currentDailyCount =
+                                    await localInterestsService
+                                        .getDailyInterestsCount();
+                                if (currentDailyCount >= maxDailyInterests) {
+                                  showFloatingSnackBar(
+                                    context,
+                                    'Daily limit reached. Try again tomorrow! 😊',
+                                  );
+                                  return;
+                                }
+                                if (currentUser!.uid != null &&
+                                    user.uid != null) {
+                                  await localInterestsService
+                                      .incrementDailyInterestsCount();
+                                  await profileRepo.saveInterest(
+                                    currentUser.uid,
+                                    user.uid,
+                                  );
+                                }
+                                showFloatingSnackBar(
+                                  context,
+                                  'Notified to the person!',
+                                );
+                                Navigator.of(context).pop();
+                              },
                             ),
                           ),
-                      error: (err, stack) => const SizedBox.shrink(),
+                        ),
+                      ],
                     );
                   },
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: reversedGradient,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: ElevatedButton.icon(
-                      icon: const Text(
-                        '🔥',
-                        style: TextStyle(
-                          fontSize: 20,
-                          shadows: [
-                            Shadow(
-                              blurRadius: 2.0,
-                              color: Colors.black,
-                              offset: Offset(0.8, 0.8),
-                            ),
-                          ],
+                  loading:
+                      () => const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       ),
-                      label: const Text(
-                        'Interested',
-                        style: TextStyle(fontSize: 16, color: Colors.white),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onPressed: () async {
-                        final localInterestsService = ref.read(
-                          localInterestsServiceProvider,
-                        );
-                        final profileRepo = ref.read(profileRepositoryProvider);
-                        final currentDailyCount =
-                            await localInterestsService
-                                .getDailyInterestsCount();
-                        if (currentDailyCount >= maxDailyInterests) {
-                          showFloatingSnackBar(
-                            context,
-                            'Daily limit reached. Try again tomorrow! 😊',
-                          );
-                          return;
-                        }
-                        if (currentUser!.uid != null && user.uid != null) {
-                          await localInterestsService
-                              .incrementDailyInterestsCount();
-                          await profileRepo.saveInterest(
-                            currentUser.uid,
-                            user.uid,
-                          );
-                        }
-                        showFloatingSnackBar(
-                          context,
-                          'Notified to the person!',
-                        );
-                        Navigator.of(context).pop();
-                      },
-                    ),
-                  ),
+                  error: (err, stack) => const SizedBox.shrink(),
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
