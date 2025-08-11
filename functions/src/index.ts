@@ -88,43 +88,31 @@ interface NotificationData {
 }
 
 // ✅ FINAL FIX: Use the single 'request' parameter with correct types and access properties accordingly.
-export const sendNotification = functions.https.onCall(
-  async (request: CallableRequest<NotificationData>) => { 
-    if (!request.auth) {
-      throw new HttpsError(
-        'unauthenticated', 
-        'The function must be called while authenticated.'
-      );
+export const sendFriendRequestNotification = firestore.onDocumentCreated(
+  'friendRequests/{requestId}',
+  async (event) => {
+    const friendRequest = event.data?.data();
+    const senderId = friendRequest?.senderId;
+    const receiverId = friendRequest?.receiverId;
+
+    if (!senderId || !receiverId) return;
+
+    const recipientRef = db.collection('users').doc(receiverId);
+    const updatedRecipientData = (await recipientRef.get()).data();
+    const fcmToken = updatedRecipientData?.fcmToken;
+
+    const senderName =
+      (await db.collection('users').doc(senderId).get()).data()?.name ??
+      'Someone';
+
+    if (fcmToken) {
+      await admin.messaging().send({
+        notification: {
+          title: 'New Friend Request!',
+          body: `${senderName} wants to be friends with you!`,
+        },
+        token: fcmToken,
+      });
     }
-  
-    // The data payload is correctly accessed via request.data
-    const { token, title, body, customData } = request.data;
-  
-    if (!token || !title || !body) {
-      throw new HttpsError(
-        'invalid-argument', 
-        'The function must be called with a token, title, and body.'
-      );
-    }
-  
-    const payload = {
-      notification: {
-        title: title,
-        body: body,
-      },
-      data: customData,
-    };
-  
-    try {
-      const response = await admin.messaging().sendToDevice(token, payload);
-      console.log('Successfully sent message:', response);
-      return { success: true };
-    } catch (error) {
-      console.error('Error sending message:', error);
-      throw new HttpsError(
-        'internal', 
-        'Failed to send notification.', 
-        error
-      );
-    }
-});
+  }
+);

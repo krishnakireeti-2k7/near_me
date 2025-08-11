@@ -153,17 +153,25 @@ class FriendshipRepository {
         });
   }
 
-  // ✅ THIS METHOD WAS MISSING IN YOUR REPOSITORY
+  // ✅ FIX: This method is updated to correctly query for all pending requests
+  //        where the current user is the receiver, regardless of whether their ID is
+  //        in user1Id or user2Id.
   Stream<List<FriendshipModel>> getPendingFriendRequestsStream(
     String currentUserId,
   ) {
     return _firestore
         .collection('friendships')
-        .where('user2Id', isEqualTo: currentUserId)
         .where('status', isEqualTo: FriendshipStatus.pending.name)
         .snapshots()
         .map((snapshot) {
           return snapshot.docs
+              .where((doc) {
+                final data = doc.data();
+                // Check if the current user is the receiver (not the sender)
+                return (data['user1Id'] == currentUserId ||
+                        data['user2Id'] == currentUserId) &&
+                    data['senderId'] != currentUserId;
+              })
               .map((doc) => FriendshipModel.fromMap(doc.data()))
               .toList();
         });

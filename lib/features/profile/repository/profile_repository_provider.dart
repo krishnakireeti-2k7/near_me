@@ -82,17 +82,17 @@ final userLocationsProvider = StreamProvider<List<UserProfileModel>>((ref) {
 // NEW: PROVIDERS FOR THE DAILY/ALL-TIME INTERESTS
 // ----------------------------------------------------
 
-// New StreamProvider: To get the number of interests received today
+// ✅ FIX: The provider is updated to correctly handle a `Stream<List<dynamic>>`.
+// It no longer uses the `.docs` getter.
 final dailyInterestsCountProvider = StreamProvider<int>((ref) {
   final authState = ref.watch(authStateProvider);
 
   if (authState is AsyncData<User?> && authState.value != null) {
     final userId = authState.value!.uid;
-    // Use the new repository method and map the list to a count
     return ref
         .read(profileRepositoryProvider)
         .getDailyInterestsStream(userId)
-        .map((interests) => interests.length);
+        .map((interestsList) => interestsList.length);
   }
   return Stream.value(0);
 });
@@ -111,6 +111,7 @@ final allInterestsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
 
   if (authState is AsyncData<User?> && authState.value != null) {
     final userId = authState.value!.uid;
+    // The repository method should return `Stream<QuerySnapshot>` for this to work.
     return ref
         .read(profileRepositoryProvider)
         .getAllInterestsStream(userId)

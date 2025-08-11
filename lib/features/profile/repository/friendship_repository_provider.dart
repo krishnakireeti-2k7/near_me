@@ -12,13 +12,11 @@ import 'package:near_me/services/notification_service.dart';
 final friendshipRepositoryProvider = Provider<FriendshipRepository>((ref) {
   return FriendshipRepository(
     firestore: FirebaseFirestore.instance,
-    // ✅ NEW: Provide the outgoing notification service
     outgoingNotificationService: ref.read(outgoingNotificationServiceProvider),
   );
 });
 
 // A stream provider to get all pending friend requests for the current user.
-// This is the provider that was missing.
 final pendingFriendRequestsProvider = StreamProvider<List<FriendshipModel>>((
   ref,
 ) {
@@ -29,6 +27,17 @@ final pendingFriendRequestsProvider = StreamProvider<List<FriendshipModel>>((
   return ref
       .read(friendshipRepositoryProvider)
       .getPendingFriendRequestsStream(currentUser!.uid);
+});
+
+// ✅ NEW: A provider that gives you the count of pending friend requests.
+final pendingFriendRequestsCountProvider = StreamProvider<int>((ref) {
+  return ref
+      .watch(pendingFriendRequestsProvider)
+      .when(
+        data: (requests) => Stream.value(requests.length),
+        loading: () => Stream.value(0),
+        error: (_, __) => Stream.value(0),
+      );
 });
 
 // Provides a stream of the friendship status between the current user and another user.

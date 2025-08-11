@@ -13,7 +13,6 @@ import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/services/local_interests_service.dart';
 import 'package:near_me/widgets/themed_switch_list_tile.dart';
-
 import 'package:near_me/features/profile/repository/friendship_repository_provider.dart';
 import 'package:near_me/features/profile/model/friendship_model.dart';
 import 'package:near_me/features/profile/repository/friendship_repository.dart';
@@ -117,16 +116,13 @@ class MiniProfileCard extends ConsumerWidget {
                     final friendshipRepository = ref.read(
                       friendshipRepositoryProvider,
                     );
-                    // ✅ NEW: Get the current user's profile and name
                     final currentUserProfile =
                         ref.watch(currentUserProfileStreamProvider).value;
                     final currentUserId = currentUserProfile?.uid;
                     final currentUserName = currentUserProfile?.name ?? '';
 
-                    // ✅ FIXED LOGIC: Correctly determine sender/receiver
                     return friendshipStatusAsync.when(
                       data: (friendship) {
-                        // Case 1: Friendship is already accepted
                         if (friendship != null &&
                             friendship.status == FriendshipStatus.accepted) {
                           return SizedBox(
@@ -136,11 +132,8 @@ class MiniProfileCard extends ConsumerWidget {
                               child: const Text('Friends'),
                             ),
                           );
-                        }
-                        // Case 2: A pending request exists
-                        else if (friendship != null &&
+                        } else if (friendship != null &&
                             friendship.status == FriendshipStatus.pending) {
-                          // Check if the current user is the one who SENT the request
                           if (friendship.senderId == currentUserId) {
                             return SizedBox(
                               width: double.infinity,
@@ -149,21 +142,25 @@ class MiniProfileCard extends ConsumerWidget {
                                 child: const Text('Request Sent'),
                               ),
                             );
-                          }
-                          // Check if the current user is the one who RECEIVED the request
-                          else {
-                            // No need for 'if else', this is the only other case
+                          } else {
                             return SizedBox(
                               width: double.infinity,
                               child: FilledButton(
                                 onPressed: () async {
-                                  if (currentUserId != null) {
-                                    await friendshipRepository.acceptFriendRequest(
-                                      friendshipId: friendship.id,
-                                      currentUserId: currentUserId,
-                                      otherUserId: user.uid,
-                                      currentUserName:
-                                          currentUserName, // ✅ FIX: Add the new parameter
+                                  if (currentUserId != null &&
+                                      currentUserName.isNotEmpty) {
+                                    await friendshipRepository
+                                        .acceptFriendRequest(
+                                          friendshipId: friendship.id,
+                                          currentUserId: currentUserId,
+                                          otherUserId: user.uid,
+                                          currentUserName: currentUserName,
+                                        );
+                                  } else {
+                                    showFloatingSnackBar(
+                                      context,
+                                      'Your profile is not fully loaded. Please wait a moment.',
+                                      isError: true,
                                     );
                                   }
                                 },
@@ -172,17 +169,23 @@ class MiniProfileCard extends ConsumerWidget {
                             );
                           }
                         }
-                        // Case 3: No friendship or request exists
                         return SizedBox(
                           width: double.infinity,
                           child: FilledButton(
                             onPressed: () async {
-                              if (currentUserId != null) {
+                              // ✅ The corrected logic
+                              if (currentUserId != null &&
+                                  currentUserName.isNotEmpty) {
                                 await friendshipRepository.sendFriendRequest(
                                   senderId: currentUserId,
-                                  senderName:
-                                      currentUserName, // ✅ FIX: Add the new parameter
+                                  senderName: currentUserName,
                                   receiverId: user.uid,
+                                );
+                              } else {
+                                showFloatingSnackBar(
+                                  context,
+                                  'Your profile is not fully loaded. Please wait a moment.',
+                                  isError: true,
                                 );
                               }
                             },

@@ -92,6 +92,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const CreateProfileScreen(),
       ),
       GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
+      // ✅ FIX: Add the missing route for /notifications
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
       GoRoute(
         path: '/interests',
         builder: (context, state) => const NotificationsScreen(),

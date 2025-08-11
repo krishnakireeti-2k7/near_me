@@ -23,6 +23,10 @@
         <meta-data
             android:name="io.flutter.embedding.android.NormalTheme"
             android:resource="@style/NormalTheme" />
+        
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_nearme" />
 
         <meta-data
             android:name="com.google.android.geo.API_KEY"
@@ -46,4 +50,4 @@
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
-    </manifest>
+</manifest>
