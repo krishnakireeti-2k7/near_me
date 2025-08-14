@@ -53,7 +53,7 @@ class MainDrawer extends ConsumerWidget {
                   onOpenProfile: () {
                     Navigator.of(context).pop();
                     if (uid != null) {
-                      context.go('/edit-profile/$uid');
+                      context.go('/profile/$uid');
                     } else {
                       context.go('/login');
                     }

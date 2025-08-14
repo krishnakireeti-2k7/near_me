@@ -17,6 +17,7 @@ import 'package:near_me/widgets/profile_info_card.dart';
 import 'package:near_me/features/profile/repository/friendship_repository_provider.dart';
 import 'package:near_me/features/profile/model/friendship_model.dart';
 import 'package:near_me/features/profile/repository/friendship_repository.dart';
+import 'package:near_me/services/local_interests_service.dart';
 
 class ViewProfileScreen extends ConsumerWidget {
   final String userId;
@@ -33,11 +34,19 @@ class ViewProfileScreen extends ConsumerWidget {
     final profileAsync = ref.watch(userProfileProvider(userId));
     final theme = Theme.of(context);
 
-    // ✅ NEW: Watch the friendship status
     final friendshipStatusAsync = ref.watch(
       friendshipStatusStreamProvider(userId),
     );
     final currentUserProfileAsync = ref.watch(currentUserProfileStreamProvider);
+
+    final friendsCount = currentUserProfileAsync.maybeWhen(
+      data: (profile) => profile?.friends?.length ?? 0,
+      orElse: () => 0,
+    );
+    final dailyInterestsCount = ref.watch(dailyInterestsCountProvider);
+    final pendingFriendRequestsCount = ref.watch(
+      pendingFriendRequestsCountProvider,
+    );
 
     return profileAsync.when(
       data: (profile) {
@@ -53,53 +62,49 @@ class ViewProfileScreen extends ConsumerWidget {
           );
         }
 
-        // Calculation for lastActiveText (will still be performed for other users)
         String lastActiveText = "Never active";
-        Color lastActiveColor = Colors.grey;
+        Color lastActiveColor = theme.colorScheme.onSurface.withOpacity(0.5);
         if (profile.lastActive != null) {
           final DateTime lastActiveDateTime = profile.lastActive!.toDate();
           lastActiveText = 'Last active: ${timeago.format(lastActiveDateTime)}';
           if (DateTime.now().difference(lastActiveDateTime).inMinutes <= 5) {
-            lastActiveColor = Colors.green;
+            lastActiveColor = theme.colorScheme.tertiary;
           }
         }
 
-        // Determine if there's any content for the main details card
         final bool hasBio =
             profile.shortBio != null && profile.shortBio!.isNotEmpty;
         final bool hasTags = profile.tags != null && profile.tags!.isNotEmpty;
         final bool hasSocial =
             (profile.socialHandles['instagram'] ?? '').isNotEmpty ||
             (profile.socialHandles['twitter'] ?? '').isNotEmpty;
-        final bool hasDetailsContent = hasBio || hasTags || hasSocial;
 
         return Scaffold(
+          backgroundColor: theme.scaffoldBackgroundColor,
           appBar: AppBar(
-            title: Text(
-              isCurrentUser ? 'My Profile' : profile.name,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
             backgroundColor: theme.scaffoldBackgroundColor,
             elevation: 0,
-            centerTitle: true,
-            leading:
-                isCurrentUser
-                    ? null
-                    : IconButton(
-                      icon: Icon(
-                        Icons.arrow_back_ios,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
+            leading: IconButton(
+              icon: Icon(
+                Icons.arrow_back_ios,
+                color: theme.colorScheme.onSurface,
+              ),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/map');
+                }
+              },
+            ),
             actions: [
-              if (isCurrentUser) // Enable edit button for current user
+              if (isCurrentUser)
                 IconButton(
-                  icon: const Icon(Icons.edit_note_rounded, size: 28),
-                  color: theme.colorScheme.primary,
+                  icon: Icon(
+                    Icons.edit_note_rounded,
+                    size: 28,
+                    color: theme.colorScheme.primary,
+                  ),
                   onPressed: () {
                     context.push('/edit-profile/${profile.uid}');
                   },
@@ -107,243 +112,193 @@ class ViewProfileScreen extends ConsumerWidget {
             ],
           ),
           body: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Profile Header Section (as a distinct card-like container)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 24,
-                    horizontal: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color.fromRGBO(0, 0, 0, 0.08),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+                // Profile Header
+                Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundImage:
+                          profile.profileImageUrl.isNotEmpty
+                              ? NetworkImage(profile.profileImageUrl)
+                              : null,
+                      child:
+                          profile.profileImageUrl.isEmpty
+                              ? Icon(
+                                Icons.person,
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.4,
+                                ),
+                                size: 60,
+                              )
+                              : null,
+                      backgroundColor: theme.cardColor,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      profile.name,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 60,
-                        backgroundImage:
-                            profile.profileImageUrl.isNotEmpty
-                                ? NetworkImage(profile.profileImageUrl)
-                                : null,
-                        child:
-                            profile.profileImageUrl.isEmpty
-                                ? Icon(
-                                  Icons.person,
-                                  color: Colors.grey[400],
-                                  size: 60,
-                                )
-                                : null,
-                        backgroundColor: Colors.grey[100],
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isCurrentUser ? 'Your Profile' : lastActiveText,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color:
+                            isCurrentUser
+                                ? theme.colorScheme.primary
+                                : lastActiveColor,
+                        fontStyle: FontStyle.italic,
                       ),
-                      const SizedBox(height: 20),
-                      Text(
-                        profile.name,
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 6),
-                      if (!isCurrentUser)
-                        Text(
-                          lastActiveText,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: lastActiveColor,
-                            fontStyle: FontStyle.italic,
-                          ),
-                          textAlign: TextAlign.center,
-                        )
-                      else
-                        Text(
-                          'Your Profile',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontStyle: FontStyle.italic,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-
-                      // ✅ UPDATED: Add the friendship button below the profile info
-                      if (!isCurrentUser &&
-                          currentUserProfileAsync.value != null) ...[
-                        const SizedBox(height: 24),
-                        friendshipStatusAsync.when(
-                          data: (friendship) {
-                            final friendshipRepository = ref.read(
-                              friendshipRepositoryProvider,
-                            );
-                            final currentUserProfile =
-                                currentUserProfileAsync.value;
-                            final currentUserId = currentUserProfile?.uid;
-                            final currentUserName =
-                                currentUserProfile?.name ?? '';
-
-                            // The user is already a friend
-                            if (friendship != null &&
-                                friendship.status ==
-                                    FriendshipStatus.accepted) {
-                              return FilledButton.tonal(
-                                onPressed: () async {
-                                  showDialog(
-                                    context: context,
-                                    builder:
-                                        (ctx) => AlertDialog(
-                                          title: const Text('Unfriend'),
-                                          content: Text(
-                                            'Are you sure you want to unfriend ${profile.name}?',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed:
-                                                  () => Navigator.of(ctx).pop(),
-                                              child: const Text('Cancel'),
-                                            ),
-                                            FilledButton(
-                                              onPressed: () async {
-                                                if (currentUserId != null) {
-                                                  await friendshipRepository
-                                                      .unfriend(
-                                                        user1Id: currentUserId,
-                                                        user2Id: userId,
-                                                      );
-                                                  Navigator.of(ctx).pop();
-                                                  showFloatingSnackBar(
-                                                    context,
-                                                    'You have unfriended ${profile.name}.',
-                                                  );
-                                                }
-                                              },
-                                              child: const Text('Unfriend'),
-                                            ),
-                                          ],
-                                        ),
-                                  );
-                                },
-                                child: const Text('Friends'),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                // Action Buttons
+                if (!isCurrentUser &&
+                    currentUserProfileAsync.value != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: friendshipStatusAsync.when(
+                      data: (friendship) {
+                        final friendshipRepository = ref.read(
+                          friendshipRepositoryProvider,
+                        );
+                        final currentUserProfile =
+                            currentUserProfileAsync.value;
+                        final currentUserId = currentUserProfile?.uid;
+                        final currentUserName = currentUserProfile?.name ?? '';
+                        if (friendship != null &&
+                            friendship.status == FriendshipStatus.accepted) {
+                          return _buildFriendActionButton(
+                            context,
+                            'Friends',
+                            () async {
+                              showDialog(
+                                context: context,
+                                builder:
+                                    (ctx) => _unfriendDialog(
+                                      context,
+                                      profile,
+                                      friendshipRepository,
+                                      currentUserId,
+                                      userId,
+                                    ),
                               );
-                            }
-
-                            // A request is pending
-                            if (friendship != null &&
-                                friendship.status == FriendshipStatus.pending) {
-                              if (friendship.senderId == currentUserId) {
-                                // Use friendship.senderId here
-                                return FilledButton.tonal(
-                                  onPressed: null,
-                                  child: const Text('Request Sent'),
-                                );
-                              } else {
-                                return FilledButton(
-                                  onPressed: () async {
-                                    if (currentUserId != null) {
-                                      await friendshipRepository
-                                          .acceptFriendRequest(
-                                            friendshipId: friendship.id,
-                                            currentUserId: currentUserId,
-                                            otherUserId: userId,
-                                            currentUserName:
-                                                currentUserName, // ✅ FIX: Pass the current user's name
-                                          );
-                                      showFloatingSnackBar(
-                                        context,
-                                        'You are now friends with ${profile.name}!',
-                                      );
-                                    }
-                                  },
-                                  child: const Text('Accept Request'),
-                                );
-                              }
-                            }
-
-                            // No friendship exists, show "Befriend" button
-                            return FilledButton(
-                              onPressed: () async {
+                            },
+                            isTonal: true,
+                          );
+                        }
+                        if (friendship != null &&
+                            friendship.status == FriendshipStatus.pending) {
+                          if (friendship.senderId == currentUserId) {
+                            return _buildFriendActionButton(
+                              context,
+                              'Request Sent',
+                              null,
+                              isTonal: true,
+                            );
+                          } else {
+                            return _buildFriendActionButton(
+                              context,
+                              'Accept Request',
+                              () async {
                                 if (currentUserId != null) {
-                                  await friendshipRepository.sendFriendRequest(
-                                    senderId: currentUserId,
-                                    senderName:
-                                        currentUserName, // ✅ FIX: Pass the sender's name
-                                    receiverId: userId,
-                                  );
+                                  await friendshipRepository
+                                      .acceptFriendRequest(
+                                        friendshipId: friendship.id,
+                                        currentUserId: currentUserId,
+                                        otherUserId: userId,
+                                        currentUserName: currentUserName,
+                                      );
                                   showFloatingSnackBar(
                                     context,
-                                    'Friend request sent to ${profile.name}.',
+                                    'You are now friends with ${profile.name}!',
                                   );
                                 }
                               },
-                              child: const Text('Befriend'),
                             );
+                          }
+                        }
+                        return _buildFriendActionButton(
+                          context,
+                          'BeFriend',
+                          () async {
+                            if (currentUserId != null) {
+                              await friendshipRepository.sendFriendRequest(
+                                senderId: currentUserId,
+                                senderName: currentUserName,
+                                receiverId: userId,
+                              );
+                              showFloatingSnackBar(
+                                context,
+                                'Friend request sent to ${profile.name}.',
+                              );
+                            }
                           },
-                          loading:
-                              () => const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
+                          icon: '🫂',
+                        );
+                      },
+                      loading:
+                          () => Center(
+                            child: SizedBox(
+                              height: 36,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: theme.colorScheme.primary,
                               ),
-                          error: (_, __) => const SizedBox.shrink(),
-                        ),
-                      ],
-                    ],
+                            ),
+                          ),
+                      error: (_, __) => const SizedBox.shrink(),
+                    ),
                   ),
+                ],
+                const SizedBox(height: 24),
+                // Stats
+                _StatsGlanceRow(
+                  isCurrentUser: isCurrentUser,
+                  friends: friendsCount,
+                  interestsToday: dailyInterestsCount.value ?? 0,
+                  requests: pendingFriendRequestsCount.value ?? 0,
                 ),
-
-                // Main Content Card (Conditionally displayed if there's any detail)
-                if (hasDetailsContent) ...[
-                  const SizedBox(height: 24),
-                  ProfileInfoCard(
-                    title: 'About & Connections',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (hasBio) ...[
-                          Text(
-                            profile.shortBio!,
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.8,
-                              ),
-                              height: 1.5,
-                            ),
+                // Main Content Cards
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      if (hasBio || hasTags)
+                        ProfileInfoCard(
+                          title: 'About',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (hasBio)
+                                Text(
+                                  profile.shortBio!,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.8),
+                                    height: 1.5,
+                                  ),
+                                ),
+                              if (hasBio && hasTags) const SizedBox(height: 16),
+                              if (hasTags)
+                                InterestsSection(tags: profile.tags!),
+                            ],
                           ),
-                          if (hasTags || hasSocial) const SizedBox(height: 16),
-                        ],
-                        if (hasTags) ...[
-                          Text(
-                            'Interests',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          InterestsSection(tags: profile.tags!),
-                          if (hasSocial) const SizedBox(height: 16),
-                        ],
-                        if (hasSocial) ...[
-                          Text(
-                            'Social Media',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Column(
+                        ),
+                      if (hasSocial) ...[
+                        const SizedBox(height: 16),
+                        ProfileInfoCard(
+                          title: 'Social Links',
+                          child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               if ((profile.socialHandles['instagram'] ?? '')
@@ -352,8 +307,8 @@ class ViewProfileScreen extends ConsumerWidget {
                                   context,
                                   'Instagram',
                                   '@${profile.socialHandles['instagram']}',
-                                  Colors.purple,
-                                  Icons.camera_alt,
+                                  Colors.pinkAccent,
+                                  Icons.camera_alt_outlined,
                                 ),
                               if ((profile.socialHandles['twitter'] ?? '')
                                   .isNotEmpty)
@@ -361,17 +316,17 @@ class ViewProfileScreen extends ConsumerWidget {
                                   context,
                                   'Twitter',
                                   '@${profile.socialHandles['twitter']}',
-                                  Colors.blue,
-                                  Icons.mail,
+                                  Colors.lightBlueAccent,
+                                  Icons.camera_alt,
                                 ),
                             ],
                           ),
-                        ],
+                        ),
                       ],
-                    ),
+                      const SizedBox(height: 24),
+                    ],
                   ),
-                ],
-                const SizedBox(height: 24),
+                ),
               ],
             ),
           ),
@@ -380,13 +335,175 @@ class ViewProfileScreen extends ConsumerWidget {
       loading:
           () => Scaffold(
             backgroundColor: theme.scaffoldBackgroundColor,
-            body: const Center(child: CircularProgressIndicator()),
+            body: Center(
+              child: CircularProgressIndicator(
+                color: theme.colorScheme.primary,
+              ),
+            ),
           ),
       error:
           (e, st) => Scaffold(
             backgroundColor: theme.scaffoldBackgroundColor,
-            body: Center(child: Text('Error loading profile: $e')),
+            body: Center(
+              child: Text(
+                'Error loading profile: $e',
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+            ),
           ),
+    );
+  }
+
+  // Updated `_buildFriendActionButton` with the refined gradient look
+  Widget _buildFriendActionButton(
+    BuildContext context,
+    String text,
+    VoidCallback? onPressed, {
+    bool isTonal = false,
+    String? icon,
+  }) {
+    final theme = Theme.of(context);
+    final isBefriendButton = icon == '🫂';
+
+    // A more subtle and cohesive gradient
+    const befriendGradient = LinearGradient(
+      colors: [Color(0xFF81C784), Color(0xFF66BB6A)], // A softer green
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+
+    return SizedBox(
+      width: double.infinity,
+      child:
+          isTonal
+              ? FilledButton.tonal(
+                style: FilledButton.styleFrom(
+                  backgroundColor: theme.cardColor,
+                  foregroundColor: theme.colorScheme.onSurface,
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: onPressed,
+                child: Text(
+                  text,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              )
+              : isBefriendButton
+              ? Container(
+                decoration: BoxDecoration(
+                  gradient: befriendGradient,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.green.withOpacity(0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onPressed,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16.0,
+                        horizontal: 24.0,
+                      ),
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (icon != null) ...[
+                              Text(icon, style: const TextStyle(fontSize: 20)),
+                              const SizedBox(width: 8),
+                            ],
+                            Text(
+                              text,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                fontSize: 18
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+              : FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: theme.colorScheme.onPrimary,
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: onPressed,
+                child: Text(
+                  text,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+    );
+  }
+
+  Widget _unfriendDialog(
+    BuildContext context,
+    UserProfileModel profile,
+    FriendshipRepository friendshipRepository,
+    String? currentUserId,
+    String otherUserId,
+  ) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      backgroundColor: theme.cardColor,
+      title: Text(
+        'Unfriend',
+        style: TextStyle(color: theme.colorScheme.onSurface),
+      ),
+      content: Text(
+        'Are you sure you want to unfriend ${profile.name}?',
+        style: TextStyle(color: theme.colorScheme.onSurface),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Cancel',
+            style: TextStyle(color: theme.colorScheme.onSurface),
+          ),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: theme.colorScheme.error,
+            foregroundColor: theme.colorScheme.onError,
+          ),
+          onPressed: () async {
+            if (currentUserId != null) {
+              await friendshipRepository.unfriend(
+                user1Id: currentUserId,
+                user2Id: otherUserId,
+              );
+              if (context.mounted) {
+                Navigator.of(context).pop();
+                showFloatingSnackBar(
+                  context,
+                  'You have unfriended ${profile.name}.',
+                );
+              }
+            }
+          },
+          child: const Text('Unfriend'),
+        ),
+      ],
     );
   }
 
@@ -394,9 +511,10 @@ class ViewProfileScreen extends ConsumerWidget {
     BuildContext context,
     String platform,
     String handle,
-    Color color,
+    Color iconColor,
     IconData icon,
   ) {
+    final theme = Theme.of(context);
     return InkWell(
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -413,17 +531,129 @@ class ViewProfileScreen extends ConsumerWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: color),
+            Icon(icon, size: 22, color: iconColor),
             const SizedBox(width: 10),
             Text(
               handle,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: color,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _StatsGlanceRow extends StatelessWidget {
+  final bool isCurrentUser;
+  final int friends;
+  final int interestsToday;
+  final int requests;
+
+  const _StatsGlanceRow({
+    required this.isCurrentUser,
+    required this.friends,
+    required this.interestsToday,
+    required this.requests,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          Expanded(
+            child: _StatChip(
+              label: 'Friends',
+              value: friends,
+              icon: Icons.people_alt_rounded,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: _StatChip(
+              label: 'Interests',
+              value: interestsToday,
+              icon: Icons.local_fire_department_rounded,
+              color: Colors.redAccent,
+            ),
+          ),
+          if (isCurrentUser) ...[
+            const SizedBox(width: 16),
+            Expanded(
+              child: _StatChip(
+                label: 'Requests',
+                value: requests,
+                icon: Icons.person_add_alt_1_rounded,
+                color: Colors.lightBlueAccent,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final String label;
+  final int value;
+  final IconData icon;
+  final Color color;
+
+  const _StatChip({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 24, color: color),
+          const SizedBox(height: 8),
+          Text(
+            '$value',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
+        ],
       ),
     );
   }
