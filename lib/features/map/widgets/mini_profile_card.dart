@@ -172,40 +172,74 @@ class MiniProfileCard extends ConsumerWidget {
                       children: [
                         SizedBox(
                           width: double.infinity,
-                          child: Consumer(
-                            builder: (context, ref, child) {
-                              final friendshipRepository = ref.read(
-                                friendshipRepositoryProvider,
-                              );
-                              final currentUserProfile =
-                                  ref
-                                      .watch(currentUserProfileStreamProvider)
-                                      .value;
-                              final currentUserId = currentUserProfile?.uid;
-                              final currentUserName =
-                                  currentUserProfile?.name ?? '';
-
-                              return FilledButton(
-                                onPressed: () async {
-                                  if (currentUserId != null &&
-                                      currentUserName.isNotEmpty) {
-                                    await friendshipRepository
-                                        .sendFriendRequest(
-                                          senderId: currentUserId,
-                                          senderName: currentUserName,
-                                          receiverId: user.uid,
-                                        );
-                                  } else {
-                                    showFloatingSnackBar(
-                                      context,
-                                      'Your profile is not fully loaded. Please wait a moment.',
-                                      isError: true,
-                                    );
-                                  }
-                                },
-                                child: const Text('Befriend'),
-                              );
-                            },
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: primaryGradient,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Consumer(
+                              builder: (context, ref, child) {
+                                final friendshipRepository = ref.read(
+                                  friendshipRepositoryProvider,
+                                );
+                                final currentUserProfile =
+                                    ref
+                                        .watch(currentUserProfileStreamProvider)
+                                        .value;
+                                final currentUserId = currentUserProfile?.uid;
+                                final currentUserName =
+                                    currentUserProfile?.name ?? '';
+                                return ElevatedButton.icon(
+                                  icon: const Text(
+                                    '🫂',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      shadows: [
+                                        Shadow(
+                                          //blurRadius: 2.0,
+                                          //color: Colors.black,
+                                          offset: Offset(0.8, 0.8),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  label: const Text(
+                                    'BeFriend',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    shadowColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  onPressed: () async {
+                                    if (currentUserId != null &&
+                                        currentUserName.isNotEmpty) {
+                                      await friendshipRepository
+                                          .sendFriendRequest(
+                                            senderId: currentUserId,
+                                            senderName: currentUserName,
+                                            receiverId: user.uid,
+                                          );
+                                    } else {
+                                      showFloatingSnackBar(
+                                        context,
+                                        'Your profile is not fully loaded. Please wait a moment.',
+                                        isError: true,
+                                      );
+                                    }
+                                  },
+                                );
+                              },
+                            ),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -304,10 +338,18 @@ class MiniProfileCard extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: ElevatedButton.icon(
-                      icon: const Icon(
-                        Icons.account_circle,
-                        color: Colors.white,
-                        size: 20,
+                      icon: const Text(
+                        '🔎',
+                        style: TextStyle(
+                          fontSize: 20,
+                          shadows: [
+                            Shadow(
+                              blurRadius: 2.0,
+                              //color: Colors.black,
+                              //offset: Offset(0.8, 0.8),
+                            ),
+                          ],
+                        ),
                       ),
                       label: const Text(
                         'View Full Profile',
