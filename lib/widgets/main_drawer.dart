@@ -8,7 +8,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/services/local_interests_service.dart';
 import 'package:near_me/widgets/logout_dialog.dart';
-import 'package:near_me/features/profile/repository/friendship_repository_provider.dart'; // ✅ NEW IMPORT
+import 'package:near_me/features/profile/repository/friendship_repository_provider.dart';
+// NOTE: This import is no longer needed since we are using GoRouter
+// import 'package:near_me/features/profile/presentation/friends_list_screen.dart';
 
 class MainDrawer extends ConsumerWidget {
   const MainDrawer({super.key});
@@ -21,12 +23,10 @@ class MainDrawer extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     final dailyInterestsCount = ref.watch(dailyInterestsCountProvider);
-    // ✅ NEW: Watch the friend requests count provider
     final pendingFriendRequestsCount = ref.watch(
       pendingFriendRequestsCountProvider,
     );
 
-    // ✅ NEW: Combine the counts to determine the total notification count.
     final totalNotificationCount =
         (dailyInterestsCount.value ?? 0) +
         (pendingFriendRequestsCount.value ?? 0);
@@ -36,7 +36,6 @@ class MainDrawer extends ConsumerWidget {
         children: [
           SafeArea(
             child: userProfileAsyncValue.when(
-              // ... (existing profile data code) ...
               data: (userProfile) {
                 final String accountName = userProfile?.name ?? 'Guest';
                 final String accountEmail = firebaseUser?.email ?? '';
@@ -148,9 +147,18 @@ class MainDrawer extends ConsumerWidget {
                 ),
                 _buildDrawerItem(
                   context,
+                  icon: Icons.people_alt_rounded,
+                  title: 'My Friends',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    // ✅ CHANGE: Use GoRouter's push method
+                    context.push('/friends-list');
+                  },
+                ),
+                _buildDrawerItem(
+                  context,
                   icon: Icons.local_fire_department_rounded,
                   title: 'Notifications',
-                  // ✅ UPDATED: Use the combined total count
                   trailing:
                       totalNotificationCount > 0
                           ? Text(

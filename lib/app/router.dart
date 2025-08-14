@@ -17,6 +17,8 @@ import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/features/profile/presentation/edit_profile_screen.dart';
 import 'package:near_me/features/map/presentation/loading_screen.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart'; 
+import 'package:near_me/features/profile/presentation/friends_list_screen.dart'; // ✅ NEW IMPORT
+
 // NEW: A combined provider that watches both auth state and profile state
 final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
   final auth = ref.watch(authStateProvider);
@@ -92,7 +94,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const CreateProfileScreen(),
       ),
       GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
-      // ✅ FIX: Add the missing route for /notifications
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationsScreen(),
@@ -146,6 +147,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             initialQuery: query,
           );
         },
+      ),
+      // ✅ NEW ROUTE: Add the route for the FriendsListScreen
+      GoRoute(
+        path: '/friends-list',
+        builder: (context, state) => const FriendsListScreen(),
       ),
     ],
   );
