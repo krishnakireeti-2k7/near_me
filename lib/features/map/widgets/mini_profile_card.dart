@@ -35,16 +35,23 @@ class MiniProfileCard extends ConsumerWidget {
             ? user.profileImageUrl
             : (isCurrentUser ? currentUser?.photoURL : null);
 
-    const primaryGradient = LinearGradient(
-      colors: [Color(0xFFff6b6b), Color(0xFFf08d0e)],
+    // New gradient for the BeFriend button
+    const befriendGradient = LinearGradient(
+      colors: [Color(0xFF2ED573), Color(0xFF1EAE98)],
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
     );
 
-    const reversedGradient = LinearGradient(
+    const interestedGradient = LinearGradient(
       colors: [Color(0xFFff6b6b), Color(0xFFf08d0e)],
       begin: Alignment.centerRight,
       end: Alignment.centerLeft,
+    );
+
+    const viewProfileGradient = LinearGradient(
+      colors: [Color(0xFFff6b6b), Color(0xFFf08d0e)],
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
     );
 
     // ✅ Keep the provider watch here
@@ -125,10 +132,9 @@ class MiniProfileCard extends ConsumerWidget {
                     final currentUserId = currentUserProfile?.uid;
                     final currentUserName = currentUserProfile?.name ?? '';
 
-                    // ✅ FIX: Only show the action buttons if not friends
                     if (friendship != null &&
                         friendship.status == FriendshipStatus.accepted) {
-                      return const SizedBox.shrink(); // No buttons needed if already friends
+                      return const SizedBox.shrink();
                     } else if (friendship != null &&
                         friendship.status == FriendshipStatus.pending) {
                       if (friendship.senderId == currentUserId) {
@@ -166,15 +172,14 @@ class MiniProfileCard extends ConsumerWidget {
                       }
                     }
 
-                    // The old 'Befriend' and 'Interested' buttons are now wrapped in a single widget
-                    // so they can be easily hidden.
                     return Column(
                       children: [
                         SizedBox(
                           width: double.infinity,
                           child: DecoratedBox(
+                            // ✅ FIX: The new gradient is applied here
                             decoration: BoxDecoration(
-                              gradient: primaryGradient,
+                              gradient: befriendGradient,
                               borderRadius: BorderRadius.circular(24),
                             ),
                             child: Consumer(
@@ -195,11 +200,7 @@ class MiniProfileCard extends ConsumerWidget {
                                     style: TextStyle(
                                       fontSize: 20,
                                       shadows: [
-                                        Shadow(
-                                          //blurRadius: 2.0,
-                                          //color: Colors.black,
-                                          offset: Offset(0.8, 0.8),
-                                        ),
+                                        Shadow(offset: Offset(0.8, 0.8)),
                                       ],
                                     ),
                                   ),
@@ -247,7 +248,7 @@ class MiniProfileCard extends ConsumerWidget {
                           width: double.infinity,
                           child: DecoratedBox(
                             decoration: BoxDecoration(
-                              gradient: reversedGradient,
+                              gradient: interestedGradient,
                               borderRadius: BorderRadius.circular(24),
                             ),
                             child: ElevatedButton.icon(
@@ -334,7 +335,7 @@ class MiniProfileCard extends ConsumerWidget {
                   width: double.infinity,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      gradient: primaryGradient,
+                      gradient: viewProfileGradient,
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: ElevatedButton.icon(
@@ -422,7 +423,7 @@ class MiniProfileCard extends ConsumerWidget {
                   width: double.infinity,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      gradient: primaryGradient,
+                      gradient: viewProfileGradient,
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: ElevatedButton(
