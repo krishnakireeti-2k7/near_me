@@ -48,6 +48,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   late final ProviderSubscription _disposeUserLocationsListener;
   late final ProviderSubscription _disposeAuthStateListener;
 
+  // Store the latest stream values to avoid ref.watch in build
+  UserProfileModel? _lastCurrentUserProfile;
+  List<UserProfileModel> _lastUserLocations = [];
+
   @override
   void initState() {
     super.initState();
@@ -69,23 +73,31 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         fireImmediately: true,
       );
 
-      _disposeUserProfileListener = ref.listenManual<
-        AsyncValue<UserProfileModel?>
-      >(currentUserProfileStreamProvider, (previous, next) {
-        _updateMarkers(
-          otherUsers: ref.read(profile_repo.userLocationsProvider).value ?? [],
-          currentUserProfile: next.value,
-        );
-      }, fireImmediately: true);
+      _disposeUserProfileListener = ref
+          .listenManual<AsyncValue<UserProfileModel?>>(
+            currentUserProfileStreamProvider,
+            (previous, next) {
+              _lastCurrentUserProfile = next.value;
+              _updateMarkers(
+                otherUsers: _lastUserLocations,
+                currentUserProfile: _lastCurrentUserProfile,
+              );
+            },
+            fireImmediately: true,
+          );
 
-      _disposeUserLocationsListener = ref.listenManual<
-        AsyncValue<List<UserProfileModel>>
-      >(profile_repo.userLocationsProvider, (previous, next) {
-        _updateMarkers(
-          otherUsers: next.value ?? [],
-          currentUserProfile: ref.read(currentUserProfileStreamProvider).value,
-        );
-      }, fireImmediately: true);
+      _disposeUserLocationsListener = ref
+          .listenManual<AsyncValue<List<UserProfileModel>>>(
+            profile_repo.userLocationsProvider,
+            (previous, next) {
+              _lastUserLocations = next.value ?? [];
+              _updateMarkers(
+                otherUsers: _lastUserLocations,
+                currentUserProfile: _lastCurrentUserProfile,
+              );
+            },
+            fireImmediately: true,
+          );
     }
   }
 
@@ -441,31 +453,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUserProfile =
-        ref.watch(currentUserProfileStreamProvider).value;
-    final userLocations =
-        ref.watch(profile_repo.userLocationsProvider).value ?? [];
-
-    if (currentUserProfile == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
     final LatLng cameraTarget;
     if (_isLocationPermissionGranted &&
         _isLocationServiceEnabled &&
-        currentUserProfile.location != null &&
-        currentUserProfile.location!.latitude != 0 &&
-        currentUserProfile.location!.longitude != 0) {
+        _lastCurrentUserProfile?.location != null &&
+        _lastCurrentUserProfile!.location!.latitude != 0 &&
+        _lastCurrentUserProfile!.location!.longitude != 0) {
       cameraTarget = LatLng(
-        currentUserProfile.location!.latitude,
-        currentUserProfile.location!.longitude,
+        _lastCurrentUserProfile!.location!.latitude,
+        _lastCurrentUserProfile!.location!.longitude,
       );
     } else {
       cameraTarget = _defaultLocation;
     }
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
+     extendBodyBehindAppBar: true,
       drawer: const MainDrawer(),
       body: Stack(
         children: [
@@ -554,7 +557,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               child: const Icon(Icons.my_location),
             ),
           ),
-          // ✅ FIX: Use a Consumer to prevent full screen reload
           Positioned(
             top: 130,
             left: 20,
@@ -563,8 +565,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 return Row(
                   children: const [
                     DailyInterestsCounterWidget(),
-                    SizedBox(width: 10), // Add spacing between the widgets
-                    DailyFriendRequestsCounterWidget(), // ✅ NEW: The new counter widget
+                    SizedBox(width: 10),
+                    DailyFriendRequestsCounterWidget(),
                   ],
                 );
               },

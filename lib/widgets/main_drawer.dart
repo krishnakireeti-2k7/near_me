@@ -124,15 +124,6 @@ class MainDrawer extends ConsumerWidget {
               children: [
                 _buildDrawerItem(
                   context,
-                  icon: Icons.map,
-                  title: 'Map',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    context.go('/');
-                  },
-                ),
-                _buildDrawerItem(
-                  context,
                   icon: Icons.account_circle_rounded,
                   title: 'My Profile',
                   onTap: () {
@@ -175,15 +166,6 @@ class MainDrawer extends ConsumerWidget {
                   },
                 ),
                 const Divider(height: 32, indent: 16, endIndent: 16),
-                _buildDrawerItem(
-                  context,
-                  icon: Icons.settings_rounded,
-                  title: 'Settings',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    // TODO: Add navigation
-                  },
-                ),
                 _buildDrawerItem(
                   context,
                   icon: Icons.logout_rounded,
