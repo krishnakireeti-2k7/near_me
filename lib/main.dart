@@ -1,10 +1,8 @@
-// file: main.dart
-
+// file: lib/main.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:near_me/app/app.dart';
 import 'package:near_me/app/router.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
@@ -27,14 +25,32 @@ void main() async {
   runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends ConsumerStatefulWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  ConsumerState<MyApp> createState() => _MyAppState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return MaterialApp.router(
+      title: 'NearMe',
+      debugShowCheckedModeBanner: false,
+      routerConfig: ref.watch(routerProvider),
+      builder: (context, child) => InterestNotificationHandler(child: child!),
+    );
+  }
 }
 
-class _MyAppState extends ConsumerState<MyApp> {
+class InterestNotificationHandler extends ConsumerStatefulWidget {
+  final Widget child;
+
+  const InterestNotificationHandler({super.key, required this.child});
+
+  @override
+  ConsumerState<InterestNotificationHandler> createState() =>
+      _InterestNotificationHandlerState();
+}
+
+class _InterestNotificationHandlerState
+    extends ConsumerState<InterestNotificationHandler> {
   int? _previousTotalInterestsCount;
 
   @override
@@ -47,8 +63,6 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authStateProvider);
-
     ref.listen<AsyncValue<UserProfileModel?>>(
       currentUserProfileStreamProvider,
       (previous, next) async {
@@ -92,10 +106,6 @@ class _MyAppState extends ConsumerState<MyApp> {
       },
     );
 
-    return MaterialApp.router(
-      title: 'NearMe',
-      debugShowCheckedModeBanner: false,
-      routerConfig: ref.watch(routerProvider),
-    );
+    return widget.child;
   }
 }
