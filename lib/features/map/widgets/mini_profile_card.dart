@@ -388,7 +388,7 @@ class MiniProfileCard extends ConsumerWidget {
                   },
                 ),
                 const SizedBox(height: 10),
-                Consumer(
+                /*Consumer(
                   builder: (context, ref, child) {
                     final isGhostModeEnabled =
                         ref.watch(mapLocationProvider).isGhostModeEnabled;
@@ -407,7 +407,7 @@ class MiniProfileCard extends ConsumerWidget {
                       icon: Icons.visibility_off,
                     );
                   },
-                ),
+                ),*/
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,

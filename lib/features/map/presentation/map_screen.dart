@@ -48,7 +48,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   late final ProviderSubscription _disposeUserProfileListener;
   late final ProviderSubscription _disposeUserLocationsListener;
   late final ProviderSubscription _disposeAuthStateListener;
-  late final ProviderSubscription _disposeMapLocationListener;
+  // REMOVED: _disposeMapLocationListener is no longer needed
+  // as there is no ghost mode logic to listen to.
 
   UserProfileModel? _lastCurrentUserProfile;
   List<UserProfileModel> _lastUserLocations = [];
@@ -114,9 +115,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               _cameraPosition = CameraPosition(target: newLatLng, zoom: 19);
             });
           }
-          _updateCurrentUserMarker(newProfile);
         }
         _lastCurrentUserProfile = newProfile;
+        _updateAllMarkers();
       }, fireImmediately: true);
 
       _disposeUserLocationsListener = ref
@@ -127,25 +128,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 'userLocationsProvider updated: ${next.value?.length} users',
               );
               _lastUserLocations = next.value ?? [];
-              _updateMarkers(
-                otherUsers: _lastUserLocations,
-                currentUserProfile: _lastCurrentUserProfile,
-                isFullUpdate: true,
-              );
+              _updateAllMarkers();
             },
             fireImmediately: true,
           );
-
-      _disposeMapLocationListener = ref.listenManual<
-        MapLocationState
-      >(mapLocationProvider, (previous, next) {
-        debugPrint(
-          'mapLocationProvider updated: isLocationSharingEnabled=${next.isLocationSharingEnabled}',
-        );
-        if (next.isLocationSharingEnabled && _lastCurrentUserProfile != null) {
-          _updateCurrentUserMarker(_lastCurrentUserProfile!);
-        }
-      }, fireImmediately: true);
     }
   }
 
@@ -154,7 +140,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _disposeUserProfileListener.close();
     _disposeUserLocationsListener.close();
     _disposeAuthStateListener.close();
-    _disposeMapLocationListener.close();
     super.dispose();
   }
 
@@ -250,81 +235,29 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-  Future<void> _updateMarkers({
-    required List<UserProfileModel> otherUsers,
-    required UserProfileModel? currentUserProfile,
-    required bool isFullUpdate,
-  }) async {
-    final Set<Marker> newMarkers = isFullUpdate ? {} : _markers.toSet();
+  // ✅ New method to handle both current and other users
+  Future<void> _updateAllMarkers() async {
+    if (_lastCurrentUserProfile == null) return;
+    final Set<Marker> newMarkers = {};
+    final String currentUserId = _lastCurrentUserProfile!.uid!;
 
-    bool hasMarkerChanged(UserProfileModel user, Marker? existingMarker) {
-      if (existingMarker == null) return true;
-      final existingPosition = existingMarker.position;
-      return user.location == null ||
-          user.location!.latitude != existingPosition.latitude ||
-          user.location!.longitude != existingPosition.longitude ||
-          user.profileImageUrl != existingMarker.infoWindow.title;
+    // 1. Add current user's marker
+    final currentMarker = await _createMarker(
+      user: _lastCurrentUserProfile!,
+      isCurrentUser: true,
+    );
+    if (currentMarker != null) {
+      newMarkers.add(currentMarker);
     }
 
-    if (isFullUpdate) {
-      for (final user in otherUsers) {
-        if (user.location != null &&
-            user.location!.latitude != 0 &&
-            user.location!.longitude != 0) {
-          final existingMarker = _markers.firstWhereOrNull(
-            (marker) => marker.markerId.value == user.uid,
-          );
-          if (hasMarkerChanged(user, existingMarker)) {
-            String? imageUrlToShow = user.profileImageUrl;
-            final bool isActive =
-                user.lastActive != null &&
-                DateTime.now()
-                        .difference(user.lastActive!.toDate())
-                        .inMinutes <=
-                    5;
+    // 2. Add other users' markers
+    for (final user in _lastUserLocations) {
+      // Skip the current user's profile from the list to avoid duplicates
+      if (user.uid == currentUserId) continue;
 
-            final markerIcon = await _getCustomMarker(imageUrlToShow, isActive);
-            newMarkers.add(
-              Marker(
-                markerId: MarkerId(user.uid!),
-                position: LatLng(
-                  user.location!.latitude,
-                  user.location!.longitude,
-                ),
-                icon: markerIcon,
-                anchor: const Offset(0.5, 0.5),
-                infoWindow: InfoWindow(title: user.name ?? user.uid),
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    builder: (_) => MiniProfileCard(user: user),
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(16),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            );
-          } else {
-            newMarkers.add(existingMarker!);
-          }
-        }
-      }
-    }
-
-    if (currentUserProfile != null &&
-        currentUserProfile.location != null &&
-        currentUserProfile.location!.latitude != 0 &&
-        currentUserProfile.location!.longitude != 0) {
-      final existingMarker = _markers.firstWhereOrNull(
-        (marker) => marker.markerId.value == currentUserProfile.uid,
-      );
-      if (hasMarkerChanged(currentUserProfile, existingMarker)) {
-        await _updateCurrentUserMarker(currentUserProfile);
-      } else {
-        newMarkers.add(existingMarker!);
+      final otherMarker = await _createMarker(user: user, isCurrentUser: false);
+      if (otherMarker != null) {
+        newMarkers.add(otherMarker);
       }
     }
 
@@ -334,54 +267,46 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-  Future<void> _updateCurrentUserMarker(
-    UserProfileModel currentUserProfile,
-  ) async {
-    final Set<Marker> newMarkers = _markers.toSet();
-    String? imageUrlToShow = currentUserProfile.profileImageUrl;
-    if (imageUrlToShow == null || imageUrlToShow.isEmpty) {
-      imageUrlToShow = ref.read(authStateProvider).value?.photoURL;
+  // ✅ New helper method to create a marker from a UserProfileModel
+  Future<Marker?> _createMarker({
+    required UserProfileModel user,
+    required bool isCurrentUser,
+  }) async {
+    if (user.location == null ||
+        (user.location!.latitude == 0 && user.location!.longitude == 0)) {
+      return null;
+    }
+
+    String? imageUrlToShow = user.profileImageUrl;
+    if (isCurrentUser) {
+      // Fallback for current user
+      if (imageUrlToShow == null || imageUrlToShow.isEmpty) {
+        imageUrlToShow = ref.read(authStateProvider).value?.photoURL;
+      }
     }
 
     final bool isActive =
-        currentUserProfile.lastActive != null &&
-        DateTime.now()
-                .difference(currentUserProfile.lastActive!.toDate())
-                .inMinutes <=
-            5;
+        user.lastActive != null &&
+        DateTime.now().difference(user.lastActive!.toDate()).inMinutes <= 5;
 
     final markerIcon = await _getCustomMarker(imageUrlToShow, isActive);
-    newMarkers.removeWhere(
-      (marker) => marker.markerId.value == currentUserProfile.uid,
-    );
-    newMarkers.add(
-      Marker(
-        markerId: MarkerId(currentUserProfile.uid!),
-        position: LatLng(
-          currentUserProfile.location!.latitude,
-          currentUserProfile.location!.longitude,
-        ),
-        icon: markerIcon,
-        anchor: const Offset(0.5, 0.5),
-        infoWindow: InfoWindow(
-          title: currentUserProfile.name ?? currentUserProfile.uid,
-        ),
-        onTap: () {
-          showModalBottomSheet(
-            context: context,
-            builder: (_) => MiniProfileCard(user: currentUserProfile),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-          );
-        },
-      ),
-    );
 
-    if (!mounted) return;
-    setState(() {
-      _markers = newMarkers;
-    });
+    return Marker(
+      markerId: MarkerId(user.uid!),
+      position: LatLng(user.location!.latitude, user.location!.longitude),
+      icon: markerIcon,
+      anchor: const Offset(0.5, 0.5),
+      infoWindow: InfoWindow(title: user.name ?? user.uid),
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          builder: (_) => MiniProfileCard(user: user),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+        );
+      },
+    );
   }
 
   Future<BitmapDescriptor> _getCustomMarker(

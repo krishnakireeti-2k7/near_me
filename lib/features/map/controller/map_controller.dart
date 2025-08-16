@@ -29,21 +29,13 @@ final googleMapControllerProvider =
 
 class MapLocationState {
   final bool isLocationSharingEnabled;
-  final bool isGhostModeEnabled;
 
-  MapLocationState({
-    this.isLocationSharingEnabled = true,
-    this.isGhostModeEnabled = false,
-  });
+  MapLocationState({this.isLocationSharingEnabled = true});
 
-  MapLocationState copyWith({
-    bool? isLocationSharingEnabled,
-    bool? isGhostModeEnabled,
-  }) {
+  MapLocationState copyWith({bool? isLocationSharingEnabled}) {
     return MapLocationState(
       isLocationSharingEnabled:
           isLocationSharingEnabled ?? this.isLocationSharingEnabled,
-      isGhostModeEnabled: isGhostModeEnabled ?? this.isGhostModeEnabled,
     );
   }
 }
@@ -71,12 +63,7 @@ class MapLocationNotifier extends StateNotifier<MapLocationState> {
     }
   }
 
-  void toggleGhostMode(bool isEnabled) {
-    state = state.copyWith(isGhostModeEnabled: isEnabled);
-    if (_currentUserId != null) {
-      _profileRepository.updateGhostModeStatus(_currentUserId!, isEnabled);
-    }
-  }
+  // REMOVED: All ghost mode related methods are gone.
 
   Future<bool> updateLocationNow() async {
     if (_currentUserId == null) return false;

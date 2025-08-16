@@ -53,28 +53,23 @@ final currentUserProfileProvider = Provider<UserProfileModel?>((ref) {
   return ref.watch(currentUserProfileStreamProvider).value;
 });
 
+// ✅ FIXED: Removed the filters so all users with valid locations are visible.
 final userLocationsProvider = StreamProvider<List<UserProfileModel>>((ref) {
   final authState = ref.watch(authStateProvider);
   final currentUserProfile = ref.watch(currentUserProfileStreamProvider).value;
 
   return authState.when(
     data: (user) {
-      if (user != null && currentUserProfile != null) {
+      if (user != null) {
         final repository = ref.read(profileRepositoryProvider);
         return repository.getAllUserProfilesStream().map((users) {
           return users.where((userProfile) {
-            final isFriend =
-                currentUserProfile.friends?.contains(userProfile.uid) ?? false;
             final hasValidLocation =
                 userProfile.location != null &&
                 userProfile.location!.latitude != 0 &&
                 userProfile.location!.longitude != 0;
-            final isNotCurrentUser = userProfile.uid != currentUserProfile.uid;
-            final isNotGhostMode = userProfile.isGhostModeEnabled != true;
-            return isFriend &&
-                hasValidLocation &&
-                isNotCurrentUser &&
-                isNotGhostMode;
+            final isNotCurrentUser = userProfile.uid != user.uid;
+            return hasValidLocation && isNotCurrentUser;
           }).toList();
         });
       } else {
