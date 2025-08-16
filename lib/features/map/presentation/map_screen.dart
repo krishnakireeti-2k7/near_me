@@ -42,14 +42,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _isSearchResultsVisible = false;
   CameraPosition? _cameraPosition;
 
-  static const LatLng _defaultLocation = LatLng(37.7749, -122.4194);
   BitmapDescriptor? _defaultMarker;
 
-  late final ProviderSubscription _disposeUserProfileListener;
-  late final ProviderSubscription _disposeUserLocationsListener;
-  late final ProviderSubscription _disposeAuthStateListener;
-  // REMOVED: _disposeMapLocationListener is no longer needed
-  // as there is no ghost mode logic to listen to.
+  // Use `late` instead of `late final` because they might be re-initialized.
+  late ProviderSubscription _disposeUserProfileListener;
+  late ProviderSubscription _disposeUserLocationsListener;
+  late ProviderSubscription _disposeAuthStateListener;
 
   UserProfileModel? _lastCurrentUserProfile;
   List<UserProfileModel> _lastUserLocations = [];
@@ -58,7 +56,64 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void initState() {
     super.initState();
     _setDefaultMarker();
-    _startLocationUpdatesIfPermitted(ref.read(authStateProvider).value);
+
+    // ✅ FIX: Call a new initialization method that sets up the listeners.
+    _initializeListeners();
+  }
+
+  // ✅ NEW METHOD: To set up all listeners once.
+  void _initializeListeners() {
+    _disposeAuthStateListener = ref.listenManual<AsyncValue<User?>>(
+      authStateProvider,
+      (previous, next) {
+        if (next.hasValue && next.value != null) {
+          _startLocationUpdatesIfPermitted(next.value);
+        }
+      },
+      fireImmediately: true,
+    );
+
+    _disposeUserProfileListener = ref.listenManual<
+      AsyncValue<UserProfileModel?>
+    >(profile_repo.currentUserProfileStreamProvider, (previous, next) {
+      debugPrint('currentUserProfileStreamProvider updated: ${next.value}');
+      final newProfile = next.value;
+      if (newProfile?.location != null &&
+          newProfile!.location!.latitude != 0 &&
+          newProfile!.location!.longitude != 0 &&
+          (_lastCurrentUserProfile?.location?.latitude !=
+                  newProfile.location!.latitude ||
+              _lastCurrentUserProfile?.location?.longitude !=
+                  newProfile.location!.longitude)) {
+        final newLatLng = LatLng(
+          newProfile.location!.latitude,
+          newProfile.location!.longitude,
+        );
+        final distance = _calculateDistance(
+          _cameraPosition?.target ??
+              LatLng(
+                newProfile.location!.latitude,
+                newProfile.location!.longitude,
+              ),
+          newLatLng,
+        );
+        if (distance > 10) {
+          setState(() {
+            _cameraPosition = CameraPosition(target: newLatLng, zoom: 19);
+          });
+        }
+      }
+      _lastCurrentUserProfile = newProfile;
+      _updateAllMarkers();
+    }, fireImmediately: true);
+
+    _disposeUserLocationsListener = ref.listenManual<
+      AsyncValue<List<UserProfileModel>>
+    >(profile_repo.userLocationsProvider, (previous, next) {
+      debugPrint('userLocationsProvider updated: ${next.value?.length} users');
+      _lastUserLocations = next.value ?? [];
+      _updateAllMarkers();
+    }, fireImmediately: true);
   }
 
   Future<void> _setDefaultMarker() async {
@@ -78,61 +133,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
-    if (mounted) {
-      _disposeAuthStateListener = ref.listenManual<AsyncValue<User?>>(
-        authStateProvider,
-        (previous, next) {
-          if (next.hasValue && next.value != null) {
-            _startLocationUpdatesIfPermitted(next.value);
-          }
-        },
-        fireImmediately: true,
-      );
-
-      _disposeUserProfileListener = ref.listenManual<
-        AsyncValue<UserProfileModel?>
-      >(profile_repo.currentUserProfileStreamProvider, (previous, next) {
-        debugPrint('currentUserProfileStreamProvider updated: ${next.value}');
-        final newProfile = next.value;
-        if (newProfile?.location != null &&
-            newProfile!.location!.latitude != 0 &&
-            newProfile!.location!.longitude != 0 &&
-            (_lastCurrentUserProfile?.location?.latitude !=
-                    newProfile.location!.latitude ||
-                _lastCurrentUserProfile?.location?.longitude !=
-                    newProfile.location!.longitude)) {
-          final newLatLng = LatLng(
-            newProfile.location!.latitude,
-            newProfile.location!.longitude,
-          );
-          final distance = _calculateDistance(
-            _cameraPosition?.target ?? _defaultLocation,
-            newLatLng,
-          );
-          if (distance > 10) {
-            setState(() {
-              _cameraPosition = CameraPosition(target: newLatLng, zoom: 19);
-            });
-          }
-        }
-        _lastCurrentUserProfile = newProfile;
-        _updateAllMarkers();
-      }, fireImmediately: true);
-
-      _disposeUserLocationsListener = ref
-          .listenManual<AsyncValue<List<UserProfileModel>>>(
-            profile_repo.userLocationsProvider,
-            (previous, next) {
-              debugPrint(
-                'userLocationsProvider updated: ${next.value?.length} users',
-              );
-              _lastUserLocations = next.value ?? [];
-              _updateAllMarkers();
-            },
-            fireImmediately: true,
-          );
-    }
+    // ✅ FIX: Remove the listener initialization from here to prevent the error.
   }
 
   @override
@@ -235,13 +236,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-  // ✅ New method to handle both current and other users
   Future<void> _updateAllMarkers() async {
     if (_lastCurrentUserProfile == null) return;
     final Set<Marker> newMarkers = {};
     final String currentUserId = _lastCurrentUserProfile!.uid!;
 
-    // 1. Add current user's marker
     final currentMarker = await _createMarker(
       user: _lastCurrentUserProfile!,
       isCurrentUser: true,
@@ -250,9 +249,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       newMarkers.add(currentMarker);
     }
 
-    // 2. Add other users' markers
     for (final user in _lastUserLocations) {
-      // Skip the current user's profile from the list to avoid duplicates
       if (user.uid == currentUserId) continue;
 
       final otherMarker = await _createMarker(user: user, isCurrentUser: false);
@@ -267,7 +264,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-  // ✅ New helper method to create a marker from a UserProfileModel
   Future<Marker?> _createMarker({
     required UserProfileModel user,
     required bool isCurrentUser,
@@ -279,7 +275,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     String? imageUrlToShow = user.profileImageUrl;
     if (isCurrentUser) {
-      // Fallback for current user
       if (imageUrlToShow == null || imageUrlToShow.isEmpty) {
         imageUrlToShow = ref.read(authStateProvider).value?.photoURL;
       }
@@ -461,9 +456,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     debugPrint('MapScreen build called at ${DateTime.now()}');
     if (_cameraPosition == null) {
       final LatLng cameraTarget;
-      if (_isLocationPermissionGranted &&
-          _isLocationServiceEnabled &&
-          _lastCurrentUserProfile?.location != null &&
+      if (_lastCurrentUserProfile?.location != null &&
           _lastCurrentUserProfile!.location!.latitude != 0 &&
           _lastCurrentUserProfile!.location!.longitude != 0) {
         cameraTarget = LatLng(
@@ -471,7 +464,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           _lastCurrentUserProfile!.location!.longitude,
         );
       } else {
-        cameraTarget = _defaultLocation;
+        cameraTarget = const LatLng(37.7749, -122.4194);
       }
       _cameraPosition = CameraPosition(target: cameraTarget, zoom: 19);
     }
@@ -497,9 +490,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   if (_isLocationPermissionGranted &&
                       _isLocationServiceEnabled) {
                     _goToCurrentLocationAndRecenter();
-                  } else {
+                  } else if (_lastCurrentUserProfile?.location != null) {
                     controller.animateCamera(
-                      CameraUpdate.newLatLngZoom(_defaultLocation, 19),
+                      CameraUpdate.newLatLngZoom(
+                        LatLng(
+                          _lastCurrentUserProfile!.location!.latitude,
+                          _lastCurrentUserProfile!.location!.longitude,
+                        ),
+                        19,
+                      ),
                     );
                   }
                 } catch (e) {
