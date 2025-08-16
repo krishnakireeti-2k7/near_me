@@ -111,7 +111,7 @@ class MapLocationNotifier extends StateNotifier<MapLocationState> {
 
   void _startLocationUpdates(String userId) {
     _locationUpdateTimer?.cancel();
-    _locationUpdateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _locationUpdateTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       _getCurrentLocationAndSendUpdate(userId);
     });
   }

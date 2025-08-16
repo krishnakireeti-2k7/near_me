@@ -1,5 +1,4 @@
 // file: lib/features/map/widgets/mini_profile_header.dart
-
 import 'package:flutter/material.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -9,7 +8,8 @@ import 'package:near_me/features/profile/model/friendship_model.dart';
 class MiniProfileHeader extends StatelessWidget {
   final UserProfileModel user;
   final bool isCurrentUser;
-  final String? imageUrlToShow;
+  final String
+  imageUrlToShow; // Changed to non-nullable since fallback is provided
   final AsyncValue<FriendshipModel?>? friendshipStatus;
 
   const MiniProfileHeader({
@@ -34,17 +34,16 @@ class MiniProfileHeader extends StatelessWidget {
     }
 
     return Row(
-      // ✅ FIX: Use CrossAxisAlignment.center for better vertical alignment
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         CircleAvatar(
           radius: 28,
           backgroundImage:
-              imageUrlToShow != null && imageUrlToShow!.isNotEmpty
-                  ? NetworkImage(imageUrlToShow!)
-                  : null,
+              imageUrlToShow.startsWith('assets/')
+                  ? AssetImage(imageUrlToShow)
+                  : NetworkImage(imageUrlToShow) as ImageProvider,
           child:
-              imageUrlToShow == null || imageUrlToShow!.isEmpty
+              imageUrlToShow.isEmpty
                   ? const Icon(Icons.person, size: 28)
                   : null,
           backgroundColor: Colors.grey[200],
@@ -55,7 +54,6 @@ class MiniProfileHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                // ✅ FIX: Use CrossAxisAlignment.center here as well for the name and chip
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Flexible(
@@ -68,8 +66,7 @@ class MiniProfileHeader extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 6), // ✅ FIX: Reduced spacing
-                  // ✅ FIX: Use a consistent Chip widget for both states
+                  const SizedBox(width: 6),
                   if (isCurrentUser)
                     Chip(
                       label: const Text('You', style: TextStyle(fontSize: 11)),

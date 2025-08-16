@@ -43,6 +43,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   CameraPosition? _cameraPosition;
 
   static const LatLng _defaultLocation = LatLng(37.7749, -122.4194);
+  BitmapDescriptor? _defaultMarker;
 
   late final ProviderSubscription _disposeUserProfileListener;
   late final ProviderSubscription _disposeUserLocationsListener;
@@ -55,7 +56,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _setDefaultMarker();
     _startLocationUpdatesIfPermitted(ref.read(authStateProvider).value);
+  }
+
+  Future<void> _setDefaultMarker() async {
+    try {
+      _defaultMarker = await BitmapDescriptor.asset(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/images/default_marker.png',
+        width: 120,
+      );
+    } catch (e) {
+      debugPrint('Error loading default marker: $e');
+      _defaultMarker = BitmapDescriptor.defaultMarker;
+    }
+    if (mounted) setState(() {});
   }
 
   @override
@@ -277,7 +293,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 ),
                 icon: markerIcon,
                 anchor: const Offset(0.5, 0.5),
-                infoWindow: InfoWindow(title: user.profileImageUrl ?? ''),
+                infoWindow: InfoWindow(title: user.name ?? user.uid),
                 onTap: () {
                   showModalBottomSheet(
                     context: context,
@@ -347,7 +363,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ),
         icon: markerIcon,
         anchor: const Offset(0.5, 0.5),
-        infoWindow: InfoWindow(title: imageUrlToShow ?? ''),
+        infoWindow: InfoWindow(
+          title: currentUserProfile.name ?? currentUserProfile.uid,
+        ),
         onTap: () {
           showModalBottomSheet(
             context: context,
@@ -370,133 +388,115 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     String? imageUrl,
     bool isActive,
   ) async {
-    final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
-    final Canvas canvas = Canvas(pictureRecorder);
-    const double markerSize = 120.0;
-    const double borderSize = 6.0;
-    const double onlineIndicatorSize = 30.0;
-    const double profilePicSize = markerSize - (borderSize * 2);
+    if (imageUrl == null || imageUrl.isEmpty) {
+      debugPrint('No profile image, using default marker');
+      return _defaultMarker ?? BitmapDescriptor.defaultMarker;
+    }
 
-    final Paint borderPaint =
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.fill;
-    final Paint shadowPaint =
-        Paint()
-          ..color = Colors.black.withOpacity(0.3)
-          ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 10.0);
-    canvas.drawCircle(
-      Offset(markerSize / 2, markerSize / 2),
-      (markerSize / 2) - 5,
-      shadowPaint,
-    );
-    canvas.drawCircle(
-      Offset(markerSize / 2, markerSize / 2),
-      (markerSize / 2),
-      borderPaint,
-    );
-
-    final Rect imageRect = Rect.fromCircle(
-      center: Offset(markerSize / 2, markerSize / 2),
-      radius: profilePicSize / 2,
-    );
-
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      try {
-        final imageProvider = NetworkImage(imageUrl);
-        final Completer<ui.Image> completer = Completer();
-        imageProvider
-            .resolve(const ImageConfiguration())
-            .addListener(
-              ImageStreamListener((ImageInfo info, bool synchronousCall) {
+    try {
+      final imageProvider = NetworkImage(imageUrl);
+      final Completer<ui.Image> completer = Completer();
+      imageProvider
+          .resolve(const ImageConfiguration())
+          .addListener(
+            ImageStreamListener(
+              (ImageInfo info, bool synchronousCall) {
                 if (!completer.isCompleted) {
                   completer.complete(info.image);
                 }
-              }),
-            );
-        final ui.Image image = await completer.future;
+              },
+              onError: (exception, stackTrace) {
+                debugPrint('Error loading image for marker: $exception');
+                if (!completer.isCompleted) {
+                  completer.completeError(exception);
+                }
+              },
+            ),
+          );
+      final ui.Image image = await completer.future;
 
-        canvas.saveLayer(imageRect, Paint());
-        canvas.clipRRect(
-          RRect.fromRectAndRadius(
-            imageRect,
-            Radius.circular(profilePicSize / 2),
-          ),
-        );
-        canvas.drawImageRect(
-          image,
-          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-          imageRect,
-          Paint(),
-        );
-        canvas.restore();
-      } catch (e) {
-        debugPrint('Error loading image for marker: $e');
-        _drawPlaceholder(canvas, markerSize, profilePicSize);
-      }
-    } else {
-      _drawPlaceholder(canvas, markerSize, profilePicSize);
-    }
+      const double markerSize = 120.0;
+      const double borderSize = 6.0;
+      const double onlineIndicatorSize = 30.0;
+      const double profilePicSize = markerSize - (borderSize * 2);
 
-    if (isActive) {
-      final Paint onlinePaint = Paint()..color = Colors.greenAccent[700]!;
-      final Paint onlineBorderPaint =
+      final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(pictureRecorder);
+
+      final Paint borderPaint =
           Paint()
             ..color = Colors.white
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 4.0;
-      final Offset indicatorPosition = Offset(
-        markerSize - onlineIndicatorSize / 2 - borderSize,
-        markerSize - onlineIndicatorSize / 2 - borderSize,
+            ..style = PaintingStyle.fill;
+      final Paint shadowPaint =
+          Paint()
+            ..color = Colors.black.withOpacity(0.3)
+            ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 10.0);
+      canvas.drawCircle(
+        Offset(markerSize / 2, markerSize / 2),
+        (markerSize / 2) - 5,
+        shadowPaint,
+      );
+      canvas.drawCircle(
+        Offset(markerSize / 2, markerSize / 2),
+        (markerSize / 2),
+        borderPaint,
       );
 
-      canvas.drawCircle(
-        indicatorPosition,
-        onlineIndicatorSize / 2,
-        onlineBorderPaint,
+      final Rect imageRect = Rect.fromCircle(
+        center: Offset(markerSize / 2, markerSize / 2),
+        radius: profilePicSize / 2,
       );
-      canvas.drawCircle(
-        indicatorPosition,
-        onlineIndicatorSize / 2 - 2,
-        onlinePaint,
+
+      canvas.saveLayer(imageRect, Paint());
+      canvas.clipRRect(
+        RRect.fromRectAndRadius(imageRect, Radius.circular(profilePicSize / 2)),
       );
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        imageRect,
+        Paint(),
+      );
+      canvas.restore();
+
+      if (isActive) {
+        final Paint onlinePaint = Paint()..color = Colors.greenAccent[700]!;
+        final Paint onlineBorderPaint =
+            Paint()
+              ..color = Colors.white
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 4.0;
+        final Offset indicatorPosition = Offset(
+          markerSize - onlineIndicatorSize / 2 - borderSize,
+          markerSize - onlineIndicatorSize / 2 - borderSize,
+        );
+
+        canvas.drawCircle(
+          indicatorPosition,
+          onlineIndicatorSize / 2,
+          onlineBorderPaint,
+        );
+        canvas.drawCircle(
+          indicatorPosition,
+          onlineIndicatorSize / 2 - 2,
+          onlinePaint,
+        );
+      }
+
+      final ui.Image markerImage = await pictureRecorder.endRecording().toImage(
+        markerSize.toInt(),
+        markerSize.toInt(),
+      );
+      final ByteData? byteData = await markerImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      final Uint8List uint8List = byteData!.buffer.asUint8List();
+
+      return BitmapDescriptor.fromBytes(uint8List);
+    } catch (e) {
+      debugPrint('Error creating custom marker: $e');
+      return _defaultMarker ?? BitmapDescriptor.defaultMarker;
     }
-
-    final ui.Image markerImage = await pictureRecorder.endRecording().toImage(
-      markerSize.toInt(),
-      markerSize.toInt(),
-    );
-    final ByteData? byteData = await markerImage.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
-    final Uint8List uint8List = byteData!.buffer.asUint8List();
-
-    return BitmapDescriptor.fromBytes(uint8List);
-  }
-
-  void _drawPlaceholder(
-    Canvas canvas,
-    double markerSize,
-    double profilePicSize,
-  ) {
-    final placeholderPaint = Paint()..color = Colors.grey[300]!;
-    canvas.drawCircle(
-      Offset(markerSize / 2, markerSize / 2),
-      profilePicSize / 2,
-      placeholderPaint,
-    );
-    final textPainter = TextPainter(
-      text: const TextSpan(text: '👤', style: TextStyle(fontSize: 48)),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(
-        (markerSize - textPainter.width) / 2,
-        (markerSize - textPainter.height) / 2,
-      ),
-    );
   }
 
   void _onPlaceSelected(Prediction place) async {}

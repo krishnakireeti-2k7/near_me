@@ -1,5 +1,4 @@
 // file: lib/features/map/widgets/mini_profile_card.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,12 +9,11 @@ import 'package:near_me/features/profile/repository/profile_repository_provider.
 import 'package:near_me/features/map/widgets/interests_section.dart';
 import 'package:near_me/features/map/widgets/mini_profile_header.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
-import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
-import 'package:near_me/services/local_interests_service.dart';
-import 'package:near_me/widgets/themed_switch_list_tile.dart';
 import 'package:near_me/features/profile/repository/friendship_repository_provider.dart';
 import 'package:near_me/features/profile/model/friendship_model.dart';
 import 'package:near_me/features/profile/repository/friendship_repository.dart';
+import 'package:near_me/services/local_interests_service.dart';
+import 'package:near_me/widgets/themed_switch_list_tile.dart';
 
 // Maximum daily interests allowed
 const int maxDailyInterests = 10;
@@ -54,7 +52,6 @@ class MiniProfileCard extends ConsumerWidget {
       end: Alignment.centerRight,
     );
 
-    // ✅ Keep the provider watch here
     final friendshipStatusAsync = ref.watch(
       friendshipStatusStreamProvider(user.uid),
     );
@@ -76,11 +73,11 @@ class MiniProfileCard extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ✅ PASS THE FRIENDSHIP STATUS TO THE HEADER
           MiniProfileHeader(
             user: user,
             isCurrentUser: isCurrentUser,
-            imageUrlToShow: imageUrlToShow,
+            imageUrlToShow:
+                imageUrlToShow ?? 'assets/images/default_profile.png',
             friendshipStatus: friendshipStatusAsync,
           ),
           const SizedBox(height: 12),
@@ -177,7 +174,6 @@ class MiniProfileCard extends ConsumerWidget {
                         SizedBox(
                           width: double.infinity,
                           child: DecoratedBox(
-                            // ✅ FIX: The new gradient is applied here
                             decoration: BoxDecoration(
                               gradient: befriendGradient,
                               borderRadius: BorderRadius.circular(24),
@@ -307,12 +303,12 @@ class MiniProfileCard extends ConsumerWidget {
                                     currentUser.uid,
                                     user.uid,
                                   );
+                                  showFloatingSnackBar(
+                                    context,
+                                    'Notified to the person!',
+                                  );
+                                  Navigator.of(context).pop();
                                 }
-                                showFloatingSnackBar(
-                                  context,
-                                  'Notified to the person!',
-                                );
-                                Navigator.of(context).pop();
                               },
                             ),
                           ),
@@ -343,13 +339,7 @@ class MiniProfileCard extends ConsumerWidget {
                         '🔎',
                         style: TextStyle(
                           fontSize: 20,
-                          shadows: [
-                            Shadow(
-                              blurRadius: 2.0,
-                              //color: Colors.black,
-                              //offset: Offset(0.8, 0.8),
-                            ),
-                          ],
+                          shadows: [Shadow(blurRadius: 2.0)],
                         ),
                       ),
                       label: const Text(
