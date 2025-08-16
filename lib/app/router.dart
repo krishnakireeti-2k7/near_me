@@ -1,44 +1,48 @@
 // file: lib/app/router.dart
-
-import 'package:flutter_google_maps_webservices/places.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
-import 'dart:async';
 import 'package:go_router/go_router.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/auth/auth_view.dart';
+import 'package:near_me/features/map/presentation/map_screen.dart';
 import 'package:near_me/features/map/widgets/searc_results_screen.dart';
 import 'package:near_me/features/notificatons/notifications_screen.dart';
 import 'package:near_me/features/profile/presentation/create_profile_screen.dart';
-import 'package:near_me/features/map/presentation/map_screen.dart';
-import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/features/profile/presentation/edit_profile_screen.dart';
 import 'package:near_me/features/map/presentation/loading_screen.dart';
-import 'package:near_me/features/profile/model/user_profile_model.dart'; 
-import 'package:near_me/features/profile/presentation/friends_list_screen.dart'; // ✅ NEW IMPORT
+import 'package:near_me/features/profile/presentation/friends_list_screen.dart';
+import 'package:flutter_google_maps_webservices/places.dart';
+import 'package:near_me/features/profile/model/user_profile_model.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
-// NEW: A combined provider that watches both auth state and profile state
+// Combined provider for auth and profile state
 final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
-  final auth = ref.watch(authStateProvider);
+  final authAsync = ref.watch(authStateProvider);
 
-  if (auth.isLoading) {
+  if (authAsync.isLoading) {
     yield {'status': 'loading'};
     return;
   }
 
-  final user = auth.value;
+  final user = authAsync.value;
   if (user == null) {
     yield {'status': 'unauthenticated'};
     return;
   }
 
-  // Watch the user profile stream. This provider will yield
-  // a new value whenever the user profile changes.
+  // Watch profile stream, but only yield significant changes
+  String? lastUid;
   await for (final userProfile in ref.watch(
     currentUserProfileStreamProvider.stream,
   )) {
+    // Avoid yielding if only location or minor fields changed
+    if (userProfile != null && userProfile.uid == lastUid) {
+      continue; // Skip updates for same profile to prevent navigation resets
+    }
+    lastUid = userProfile?.uid;
+
     if (userProfile == null) {
       yield {'status': 'needs-profile', 'user': user};
     } else {
@@ -47,40 +51,53 @@ final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
   }
 });
 
+class BootstrapperChangeNotifier extends ChangeNotifier {
+  BootstrapperChangeNotifier(this.ref) {
+    ref.listen<AsyncValue<Map<String, dynamic>>>(bootstrapperProvider, (
+      previous,
+      next,
+    ) {
+      // Only notify on status changes or initial load
+      if (previous?.value?['status'] != next.value?['status']) {
+        notifyListeners();
+      }
+    });
+  }
+
+  final Ref ref;
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final bootstrapper = ref.watch(bootstrapperProvider);
+  final bootstrapperNotifier = BootstrapperChangeNotifier(ref);
 
   return GoRouter(
     initialLocation: '/',
-    refreshListenable: GoRouterRefreshStream(
-      ref.watch(bootstrapperProvider.stream),
-    ),
+    refreshListenable: bootstrapperNotifier,
     redirect: (context, state) {
-      final status = bootstrapper.asData?.value['status'];
+      final bootstrapper = ref.read(bootstrapperProvider);
 
       if (bootstrapper.isLoading) {
-        return null;
+        return '/'; // Stay on loading screen during initial load
       }
 
-      if (status == 'unauthenticated' || status == null) {
-        return (state.matchedLocation != '/login') ? '/login' : null;
+      final status = bootstrapper.asData?.value['status'];
+
+      if (status == 'unauthenticated') {
+        return state.matchedLocation != '/login' ? '/login' : null;
       }
 
       if (status == 'needs-profile') {
         final isCreatingOrEditingProfile =
             state.matchedLocation == '/create-profile' ||
             state.matchedLocation.startsWith('/edit-profile');
-
         return !isCreatingOrEditingProfile ? '/create-profile' : null;
       }
 
-      // User is authenticated and has a profile
       if (status == 'authenticated') {
         final isAuthRoute =
             state.matchedLocation == '/login' ||
             state.matchedLocation == '/create-profile' ||
             state.matchedLocation == '/';
-
         return isAuthRoute ? '/map' : null;
       }
 
@@ -140,7 +157,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           final places = data['places'] as List<Prediction>;
           final users = data['users'] as List<UserProfileModel>;
           final query = data['query'] as String;
-
           return SearchResultsScreen(
             places: places,
             users: users,
@@ -148,7 +164,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      // ✅ NEW ROUTE: Add the route for the FriendsListScreen
       GoRoute(
         path: '/friends-list',
         builder: (context, state) => const FriendsListScreen(),
@@ -156,17 +171,3 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-
-class GoRouterRefreshStream extends ChangeNotifier {
-  GoRouterRefreshStream(Stream<dynamic> stream) {
-    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
-  }
-
-  late final StreamSubscription<dynamic> _subscription;
-
-  @override
-  void dispose() {
-    _subscription.cancel();
-    super.dispose();
-  }
-}

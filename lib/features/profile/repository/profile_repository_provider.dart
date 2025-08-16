@@ -1,5 +1,4 @@
 // file: lib/features/profile/repository/profile_repository_provider.dart
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,7 +6,6 @@ import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 
-// Provide the ProfileRepository with both Firestore and Auth instances
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
   return ProfileRepository(
     firestore: FirebaseFirestore.instance,
@@ -15,7 +13,6 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
   );
 });
 
-// Get any user's profile by UID
 final userProfileProvider = FutureProvider.family<UserProfileModel?, String>((
   ref,
   uid,
@@ -24,7 +21,6 @@ final userProfileProvider = FutureProvider.family<UserProfileModel?, String>((
   return await repo.getUserProfile(uid);
 });
 
-// Get current logged-in user's profile (as a FutureProvider for one-time fetch)
 final currentUserProfileFutureProvider = FutureProvider<UserProfileModel?>((
   ref,
 ) async {
@@ -32,7 +28,6 @@ final currentUserProfileFutureProvider = FutureProvider<UserProfileModel?>((
   return await repo.getCurrentUserProfile();
 });
 
-// StreamProvider: Stream for the currently authenticated user's profile
 final currentUserProfileStreamProvider = StreamProvider<UserProfileModel?>((
   ref,
 ) {
@@ -54,36 +49,38 @@ final currentUserProfileStreamProvider = StreamProvider<UserProfileModel?>((
   );
 });
 
-// A simple Provider to get the current UserProfileModel synchronously from the stream
 final currentUserProfileProvider = Provider<UserProfileModel?>((ref) {
   return ref.watch(currentUserProfileStreamProvider).value;
 });
 
-// Stream to get all user profiles for the map
+// ✅ FIXED: Removed the filters so all users with valid locations are visible.
 final userLocationsProvider = StreamProvider<List<UserProfileModel>>((ref) {
   final authState = ref.watch(authStateProvider);
+  final currentUserProfile = ref.watch(currentUserProfileStreamProvider).value;
 
   return authState.when(
     data: (user) {
       if (user != null) {
         final repository = ref.read(profileRepositoryProvider);
-        return repository.getAllUserProfilesStream();
+        return repository.getAllUserProfilesStream().map((users) {
+          return users.where((userProfile) {
+            final hasValidLocation =
+                userProfile.location != null &&
+                userProfile.location!.latitude != 0 &&
+                userProfile.location!.longitude != 0;
+            final isNotCurrentUser = userProfile.uid != user.uid;
+            return hasValidLocation && isNotCurrentUser;
+          }).toList();
+        });
       } else {
-        // Return empty list if not authenticated
         return Stream.value([]);
       }
     },
-    loading: () => const Stream.empty(),
-    error: (_, __) => const Stream.empty(),
+    loading: () => Stream.value([]),
+    error: (_, __) => Stream.value([]),
   );
 });
 
-// ----------------------------------------------------
-// NEW: PROVIDERS FOR THE DAILY/ALL-TIME INTERESTS
-// ----------------------------------------------------
-
-// ✅ FIX: The provider is updated to correctly handle a `Stream<List<dynamic>>`.
-// It no longer uses the `.docs` getter.
 final dailyInterestsCountProvider = StreamProvider<int>((ref) {
   final authState = ref.watch(authStateProvider);
 
@@ -97,21 +94,16 @@ final dailyInterestsCountProvider = StreamProvider<int>((ref) {
   return Stream.value(0);
 });
 
-// **IMPORTANT UPDATE**
-// 1. New Provider: To expose the deleteInterest method from the repository.
 final interestDeletionProvider = Provider((ref) {
   final repo = ref.read(profileRepositoryProvider);
   return (String documentId) => repo.deleteInterest(documentId);
 });
 
-// 2. Updated StreamProvider: To get the full list of interests (for the notifications screen)
-//    This now correctly adds the documentId to each interest item.
 final allInterestsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
   final authState = ref.watch(authStateProvider);
 
   if (authState is AsyncData<User?> && authState.value != null) {
     final userId = authState.value!.uid;
-    // The repository method should return `Stream<QuerySnapshot>` for this to work.
     return ref
         .read(profileRepositoryProvider)
         .getAllInterestsStream(userId)
@@ -121,7 +113,7 @@ final allInterestsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
                   .map(
                     (doc) => {
                       ...doc.data() as Map<String, dynamic>,
-                      'documentId': doc.id, // This line is crucial for deletion
+                      'documentId': doc.id,
                     },
                   )
                   .toList(),
@@ -130,12 +122,11 @@ final allInterestsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
   return Stream.value([]);
 });
 
-// NEW: Provider to search users by name
 final searchUsersByNameProvider =
     FutureProvider.family<List<UserProfileModel>, String>((ref, query) {
       if (query.isEmpty) {
         return Future.value([]);
       }
-      final profileRepository = ref.watch(profileRepositoryProvider);
+      final profileRepository = ref.read(profileRepositoryProvider);
       return profileRepository.searchUsersByName(query);
     });

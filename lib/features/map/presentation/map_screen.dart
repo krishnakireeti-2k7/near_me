@@ -1,5 +1,4 @@
 // file: lib/features/map/presentation/map_screen.dart
-
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:firebase_auth/firebase_auth.dart';
@@ -16,7 +15,6 @@ import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/map/controller/map_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart'
     as profile_repo;
-import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:near_me/widgets/main_drawer.dart';
@@ -24,6 +22,7 @@ import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:near_me/features/map/widgets/daily_interests_counter_widget.dart';
 import 'package:near_me/services/location_service.dart';
+import 'package:collection/collection.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -41,21 +40,39 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _isLocationServiceEnabled = false;
   String? _locationStatusMessage;
   bool _isSearchResultsVisible = false;
+  CameraPosition? _cameraPosition;
 
   static const LatLng _defaultLocation = LatLng(37.7749, -122.4194);
+  BitmapDescriptor? _defaultMarker;
 
   late final ProviderSubscription _disposeUserProfileListener;
   late final ProviderSubscription _disposeUserLocationsListener;
   late final ProviderSubscription _disposeAuthStateListener;
+  // REMOVED: _disposeMapLocationListener is no longer needed
+  // as there is no ghost mode logic to listen to.
 
-  // Store the latest stream values to avoid ref.watch in build
   UserProfileModel? _lastCurrentUserProfile;
   List<UserProfileModel> _lastUserLocations = [];
 
   @override
   void initState() {
     super.initState();
+    _setDefaultMarker();
     _startLocationUpdatesIfPermitted(ref.read(authStateProvider).value);
+  }
+
+  Future<void> _setDefaultMarker() async {
+    try {
+      _defaultMarker = await BitmapDescriptor.asset(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/images/default_marker.png',
+        width: 120,
+      );
+    } catch (e) {
+      debugPrint('Error loading default marker: $e');
+      _defaultMarker = BitmapDescriptor.defaultMarker;
+    }
+    if (mounted) setState(() {});
   }
 
   @override
@@ -73,28 +90,45 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         fireImmediately: true,
       );
 
-      _disposeUserProfileListener = ref
-          .listenManual<AsyncValue<UserProfileModel?>>(
-            currentUserProfileStreamProvider,
-            (previous, next) {
-              _lastCurrentUserProfile = next.value;
-              _updateMarkers(
-                otherUsers: _lastUserLocations,
-                currentUserProfile: _lastCurrentUserProfile,
-              );
-            },
-            fireImmediately: true,
+      _disposeUserProfileListener = ref.listenManual<
+        AsyncValue<UserProfileModel?>
+      >(profile_repo.currentUserProfileStreamProvider, (previous, next) {
+        debugPrint('currentUserProfileStreamProvider updated: ${next.value}');
+        final newProfile = next.value;
+        if (newProfile?.location != null &&
+            newProfile!.location!.latitude != 0 &&
+            newProfile!.location!.longitude != 0 &&
+            (_lastCurrentUserProfile?.location?.latitude !=
+                    newProfile.location!.latitude ||
+                _lastCurrentUserProfile?.location?.longitude !=
+                    newProfile.location!.longitude)) {
+          final newLatLng = LatLng(
+            newProfile.location!.latitude,
+            newProfile.location!.longitude,
           );
+          final distance = _calculateDistance(
+            _cameraPosition?.target ?? _defaultLocation,
+            newLatLng,
+          );
+          if (distance > 10) {
+            setState(() {
+              _cameraPosition = CameraPosition(target: newLatLng, zoom: 19);
+            });
+          }
+        }
+        _lastCurrentUserProfile = newProfile;
+        _updateAllMarkers();
+      }, fireImmediately: true);
 
       _disposeUserLocationsListener = ref
           .listenManual<AsyncValue<List<UserProfileModel>>>(
             profile_repo.userLocationsProvider,
             (previous, next) {
-              _lastUserLocations = next.value ?? [];
-              _updateMarkers(
-                otherUsers: _lastUserLocations,
-                currentUserProfile: _lastCurrentUserProfile,
+              debugPrint(
+                'userLocationsProvider updated: ${next.value?.length} users',
               );
+              _lastUserLocations = next.value ?? [];
+              _updateAllMarkers();
             },
             fireImmediately: true,
           );
@@ -107,6 +141,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _disposeUserLocationsListener.close();
     _disposeAuthStateListener.close();
     super.dispose();
+  }
+
+  double _calculateDistance(LatLng from, LatLng to) {
+    return Geolocator.distanceBetween(
+      from.latitude,
+      from.longitude,
+      to.latitude,
+      to.longitude,
+    );
   }
 
   Future<void> _startLocationUpdatesIfPermitted(User? currentUser) async {
@@ -192,79 +235,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-  Future<void> _updateMarkers({
-    required List<UserProfileModel> otherUsers,
-    required UserProfileModel? currentUserProfile,
-  }) async {
+  // ✅ New method to handle both current and other users
+  Future<void> _updateAllMarkers() async {
+    if (_lastCurrentUserProfile == null) return;
     final Set<Marker> newMarkers = {};
+    final String currentUserId = _lastCurrentUserProfile!.uid!;
 
-    for (final user in otherUsers) {
-      if (user.location != null &&
-          user.location!.latitude != 0 &&
-          user.location!.longitude != 0) {
-        String? imageUrlToShow = user.profileImageUrl;
-        final bool isActive =
-            user.lastActive != null &&
-            DateTime.now().difference(user.lastActive!.toDate()).inMinutes <= 5;
-
-        final markerIcon = await _getCustomMarker(imageUrlToShow, isActive);
-        newMarkers.add(
-          Marker(
-            markerId: MarkerId(user.uid!),
-            position: LatLng(user.location!.latitude, user.location!.longitude),
-            icon: markerIcon,
-            anchor: const Offset(0.5, 0.5),
-            onTap: () {
-              showModalBottomSheet(
-                context: context,
-                builder: (_) => MiniProfileCard(user: user),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                ),
-              );
-            },
-          ),
-        );
-      }
+    // 1. Add current user's marker
+    final currentMarker = await _createMarker(
+      user: _lastCurrentUserProfile!,
+      isCurrentUser: true,
+    );
+    if (currentMarker != null) {
+      newMarkers.add(currentMarker);
     }
 
-    if (currentUserProfile != null &&
-        currentUserProfile.location != null &&
-        currentUserProfile.location!.latitude != 0 &&
-        currentUserProfile.location!.longitude != 0) {
-      String? imageUrlToShow = currentUserProfile.profileImageUrl;
-      if (imageUrlToShow == null || imageUrlToShow.isEmpty) {
-        imageUrlToShow = ref.read(authStateProvider).value?.photoURL;
+    // 2. Add other users' markers
+    for (final user in _lastUserLocations) {
+      // Skip the current user's profile from the list to avoid duplicates
+      if (user.uid == currentUserId) continue;
+
+      final otherMarker = await _createMarker(user: user, isCurrentUser: false);
+      if (otherMarker != null) {
+        newMarkers.add(otherMarker);
       }
-
-      final bool isActive =
-          currentUserProfile.lastActive != null &&
-          DateTime.now()
-                  .difference(currentUserProfile.lastActive!.toDate())
-                  .inMinutes <=
-              5;
-
-      final markerIcon = await _getCustomMarker(imageUrlToShow, isActive);
-      newMarkers.add(
-        Marker(
-          markerId: MarkerId(currentUserProfile.uid!),
-          position: LatLng(
-            currentUserProfile.location!.latitude,
-            currentUserProfile.location!.longitude,
-          ),
-          icon: markerIcon,
-          anchor: const Offset(0.5, 0.5),
-          onTap: () {
-            showModalBottomSheet(
-              context: context,
-              builder: (_) => MiniProfileCard(user: currentUserProfile),
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-            );
-          },
-        ),
-      );
     }
 
     if (!mounted) return;
@@ -273,155 +267,164 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
+  // ✅ New helper method to create a marker from a UserProfileModel
+  Future<Marker?> _createMarker({
+    required UserProfileModel user,
+    required bool isCurrentUser,
+  }) async {
+    if (user.location == null ||
+        (user.location!.latitude == 0 && user.location!.longitude == 0)) {
+      return null;
+    }
+
+    String? imageUrlToShow = user.profileImageUrl;
+    if (isCurrentUser) {
+      // Fallback for current user
+      if (imageUrlToShow == null || imageUrlToShow.isEmpty) {
+        imageUrlToShow = ref.read(authStateProvider).value?.photoURL;
+      }
+    }
+
+    final bool isActive =
+        user.lastActive != null &&
+        DateTime.now().difference(user.lastActive!.toDate()).inMinutes <= 5;
+
+    final markerIcon = await _getCustomMarker(imageUrlToShow, isActive);
+
+    return Marker(
+      markerId: MarkerId(user.uid!),
+      position: LatLng(user.location!.latitude, user.location!.longitude),
+      icon: markerIcon,
+      anchor: const Offset(0.5, 0.5),
+      infoWindow: InfoWindow(title: user.name ?? user.uid),
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          builder: (_) => MiniProfileCard(user: user),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+        );
+      },
+    );
+  }
+
   Future<BitmapDescriptor> _getCustomMarker(
     String? imageUrl,
     bool isActive,
   ) async {
-    final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
-    final Canvas canvas = Canvas(pictureRecorder);
-    const double markerSize = 120.0;
-    const double borderSize = 6.0;
-    const double onlineIndicatorSize = 30.0;
-    const double profilePicSize = markerSize - (borderSize * 2);
+    if (imageUrl == null || imageUrl.isEmpty) {
+      debugPrint('No profile image, using default marker');
+      return _defaultMarker ?? BitmapDescriptor.defaultMarker;
+    }
 
-    final Paint borderPaint =
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.fill;
-    final Paint shadowPaint =
-        Paint()
-          ..color = Colors.black.withOpacity(0.3)
-          ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 10.0);
-    canvas.drawCircle(
-      Offset(markerSize / 2, markerSize / 2),
-      (markerSize / 2) - 5,
-      shadowPaint,
-    );
-    canvas.drawCircle(
-      Offset(markerSize / 2, markerSize / 2),
-      (markerSize / 2),
-      borderPaint,
-    );
-
-    final Rect imageRect = Rect.fromCircle(
-      center: Offset(markerSize / 2, markerSize / 2),
-      radius: profilePicSize / 2,
-    );
-
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      try {
-        final imageProvider = NetworkImage(imageUrl);
-        final Completer<ui.Image> completer = Completer();
-        imageProvider
-            .resolve(const ImageConfiguration())
-            .addListener(
-              ImageStreamListener((ImageInfo info, bool synchronousCall) {
+    try {
+      final imageProvider = NetworkImage(imageUrl);
+      final Completer<ui.Image> completer = Completer();
+      imageProvider
+          .resolve(const ImageConfiguration())
+          .addListener(
+            ImageStreamListener(
+              (ImageInfo info, bool synchronousCall) {
                 if (!completer.isCompleted) {
                   completer.complete(info.image);
                 }
-              }),
-            );
-        final ui.Image image = await completer.future;
+              },
+              onError: (exception, stackTrace) {
+                debugPrint('Error loading image for marker: $exception');
+                if (!completer.isCompleted) {
+                  completer.completeError(exception);
+                }
+              },
+            ),
+          );
+      final ui.Image image = await completer.future;
 
-        canvas.saveLayer(imageRect, Paint());
-        canvas.clipRRect(
-          RRect.fromRectAndRadius(
-            imageRect,
-            Radius.circular(profilePicSize / 2),
-          ),
-        );
-        canvas.drawImageRect(
-          image,
-          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-          imageRect,
-          Paint(),
-        );
-        canvas.restore();
-      } catch (e) {
-        debugPrint('Error loading image for marker: $e');
-        _drawPlaceholder(canvas, markerSize, profilePicSize);
-      }
-    } else {
-      _drawPlaceholder(canvas, markerSize, profilePicSize);
-    }
+      const double markerSize = 120.0;
+      const double borderSize = 6.0;
+      const double onlineIndicatorSize = 30.0;
+      const double profilePicSize = markerSize - (borderSize * 2);
 
-    if (isActive) {
-      final Paint onlinePaint = Paint()..color = Colors.greenAccent[700]!;
-      final Paint onlineBorderPaint =
+      final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(pictureRecorder);
+
+      final Paint borderPaint =
           Paint()
             ..color = Colors.white
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 4.0;
-      final Offset indicatorPosition = Offset(
-        markerSize - onlineIndicatorSize / 2 - borderSize,
-        markerSize - onlineIndicatorSize / 2 - borderSize,
+            ..style = PaintingStyle.fill;
+      final Paint shadowPaint =
+          Paint()
+            ..color = Colors.black.withOpacity(0.3)
+            ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 10.0);
+      canvas.drawCircle(
+        Offset(markerSize / 2, markerSize / 2),
+        (markerSize / 2) - 5,
+        shadowPaint,
+      );
+      canvas.drawCircle(
+        Offset(markerSize / 2, markerSize / 2),
+        (markerSize / 2),
+        borderPaint,
       );
 
-      canvas.drawCircle(
-        indicatorPosition,
-        onlineIndicatorSize / 2,
-        onlineBorderPaint,
+      final Rect imageRect = Rect.fromCircle(
+        center: Offset(markerSize / 2, markerSize / 2),
+        radius: profilePicSize / 2,
       );
-      canvas.drawCircle(
-        indicatorPosition,
-        onlineIndicatorSize / 2 - 2,
-        onlinePaint,
+
+      canvas.saveLayer(imageRect, Paint());
+      canvas.clipRRect(
+        RRect.fromRectAndRadius(imageRect, Radius.circular(profilePicSize / 2)),
       );
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        imageRect,
+        Paint(),
+      );
+      canvas.restore();
+
+      if (isActive) {
+        final Paint onlinePaint = Paint()..color = Colors.greenAccent[700]!;
+        final Paint onlineBorderPaint =
+            Paint()
+              ..color = Colors.white
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 4.0;
+        final Offset indicatorPosition = Offset(
+          markerSize - onlineIndicatorSize / 2 - borderSize,
+          markerSize - onlineIndicatorSize / 2 - borderSize,
+        );
+
+        canvas.drawCircle(
+          indicatorPosition,
+          onlineIndicatorSize / 2,
+          onlineBorderPaint,
+        );
+        canvas.drawCircle(
+          indicatorPosition,
+          onlineIndicatorSize / 2 - 2,
+          onlinePaint,
+        );
+      }
+
+      final ui.Image markerImage = await pictureRecorder.endRecording().toImage(
+        markerSize.toInt(),
+        markerSize.toInt(),
+      );
+      final ByteData? byteData = await markerImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      final Uint8List uint8List = byteData!.buffer.asUint8List();
+
+      return BitmapDescriptor.fromBytes(uint8List);
+    } catch (e) {
+      debugPrint('Error creating custom marker: $e');
+      return _defaultMarker ?? BitmapDescriptor.defaultMarker;
     }
-
-    final ui.Image markerImage = await pictureRecorder.endRecording().toImage(
-      markerSize.toInt(),
-      markerSize.toInt(),
-    );
-    final ByteData? byteData = await markerImage.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
-    final Uint8List uint8List = byteData!.buffer.asUint8List();
-
-    return BitmapDescriptor.fromBytes(uint8List);
-  }
-
-  void _drawPlaceholder(
-    Canvas canvas,
-    double markerSize,
-    double profilePicSize,
-  ) {
-    final placeholderPaint = Paint()..color = Colors.grey[300]!;
-    canvas.drawCircle(
-      Offset(markerSize / 2, markerSize / 2),
-      profilePicSize / 2,
-      placeholderPaint,
-    );
-    final textPainter = TextPainter(
-      text: const TextSpan(text: '👤', style: TextStyle(fontSize: 48)),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(
-        (markerSize - textPainter.width) / 2,
-        (markerSize - textPainter.height) / 2,
-      ),
-    );
   }
 
   void _onPlaceSelected(Prediction place) async {}
-
-  void _animateCameraToUserLocation(GeoPoint? location) {
-    final mapController = ref.read(googleMapControllerProvider);
-    if (mapController != null &&
-        location != null &&
-        location.latitude != 0 &&
-        location.longitude != 0) {
-      mapController.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          LatLng(location.latitude, location.longitude),
-          19,
-        ),
-      );
-    }
-  }
 
   void _handlePlaceSelected(LatLng location) {
     final mapController = ref.read(googleMapControllerProvider);
@@ -437,13 +440,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final mapController = ref.read(googleMapControllerProvider);
 
       if (position != null && mapController != null) {
+        final newCameraPosition = CameraPosition(
+          target: LatLng(position.latitude, position.longitude),
+          zoom: 20,
+        );
+        setState(() {
+          _cameraPosition = newCameraPosition;
+        });
         mapController.animateCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(
-              target: LatLng(position.latitude, position.longitude),
-              zoom: 20,
-            ),
-          ),
+          CameraUpdate.newCameraPosition(newCameraPosition),
         );
       }
     } catch (e) {
@@ -453,22 +458,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final LatLng cameraTarget;
-    if (_isLocationPermissionGranted &&
-        _isLocationServiceEnabled &&
-        _lastCurrentUserProfile?.location != null &&
-        _lastCurrentUserProfile!.location!.latitude != 0 &&
-        _lastCurrentUserProfile!.location!.longitude != 0) {
-      cameraTarget = LatLng(
-        _lastCurrentUserProfile!.location!.latitude,
-        _lastCurrentUserProfile!.location!.longitude,
-      );
-    } else {
-      cameraTarget = _defaultLocation;
+    debugPrint('MapScreen build called at ${DateTime.now()}');
+    if (_cameraPosition == null) {
+      final LatLng cameraTarget;
+      if (_isLocationPermissionGranted &&
+          _isLocationServiceEnabled &&
+          _lastCurrentUserProfile?.location != null &&
+          _lastCurrentUserProfile!.location!.latitude != 0 &&
+          _lastCurrentUserProfile!.location!.longitude != 0) {
+        cameraTarget = LatLng(
+          _lastCurrentUserProfile!.location!.latitude,
+          _lastCurrentUserProfile!.location!.longitude,
+        );
+      } else {
+        cameraTarget = _defaultLocation;
+      }
+      _cameraPosition = CameraPosition(target: cameraTarget, zoom: 19);
     }
 
     return Scaffold(
-     extendBodyBehindAppBar: true,
+      extendBodyBehindAppBar: true,
       drawer: const MainDrawer(),
       body: Stack(
         children: [
@@ -497,10 +506,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   debugPrint('Failed to load map style: $e');
                 }
               },
-              initialCameraPosition: CameraPosition(
-                target: cameraTarget,
-                zoom: 19,
-              ),
+              initialCameraPosition: _cameraPosition!,
               markers: _markers,
               myLocationEnabled: _isLocationPermissionGranted,
               myLocationButtonEnabled: false,

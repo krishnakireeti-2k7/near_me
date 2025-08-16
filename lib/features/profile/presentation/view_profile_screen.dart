@@ -1,23 +1,17 @@
 // file: lib/features/profile/presentation/view_profile_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:near_me/features/map/widgets/interests_section.dart';
-import 'package:near_me/widgets/showFloatingsnackBar.dart';
-import 'package:timeago/timeago.dart' as timeago;
-
-// Import the essential reusable widget
-import 'package:near_me/widgets/profile_info_card.dart';
-
-// ✅ NEW IMPORTS for Friendship Feature
 import 'package:near_me/features/profile/repository/friendship_repository_provider.dart';
 import 'package:near_me/features/profile/model/friendship_model.dart';
 import 'package:near_me/features/profile/repository/friendship_repository.dart';
 import 'package:near_me/services/local_interests_service.dart';
+import 'package:near_me/widgets/showFloatingsnackBar.dart';
+import 'package:near_me/widgets/profile_info_card.dart';
+import 'package:near_me/features/map/widgets/interests_section.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 class ViewProfileScreen extends ConsumerWidget {
   final String userId;
@@ -37,12 +31,10 @@ class ViewProfileScreen extends ConsumerWidget {
     final friendshipStatusAsync = ref.watch(
       friendshipStatusStreamProvider(userId),
     );
-    final currentUserProfileAsync = ref.watch(currentUserProfileStreamProvider);
-
-    final friendsCount = currentUserProfileAsync.maybeWhen(
-      data: (profile) => profile?.friends?.length ?? 0,
-      orElse: () => 0,
-    );
+    final currentUserProfile = ref.watch(
+      currentUserProfileProvider,
+    ); // Changed to synchronous provider
+    final friendsCount = currentUserProfile?.friends?.length ?? 0;
     final dailyInterestsCount = ref.watch(dailyInterestsCountProvider);
     final pendingFriendRequestsCount = ref.watch(
       pendingFriendRequestsCountProvider,
@@ -72,9 +64,8 @@ class ViewProfileScreen extends ConsumerWidget {
           }
         }
 
-        final bool hasBio =
-            profile.shortBio != null && profile.shortBio!.isNotEmpty;
-        final bool hasTags = profile.tags != null && profile.tags!.isNotEmpty;
+        final bool hasBio = profile.shortBio.isNotEmpty;
+        final bool hasTags = profile.tags.isNotEmpty;
         final bool hasSocial =
             (profile.socialHandles['instagram'] ?? '').isNotEmpty ||
             (profile.socialHandles['twitter'] ?? '').isNotEmpty;
@@ -161,8 +152,7 @@ class ViewProfileScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
                 // Action Buttons
-                if (!isCurrentUser &&
-                    currentUserProfileAsync.value != null) ...[
+                if (!isCurrentUser && currentUserProfile != null) ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
                     child: friendshipStatusAsync.when(
@@ -170,10 +160,8 @@ class ViewProfileScreen extends ConsumerWidget {
                         final friendshipRepository = ref.read(
                           friendshipRepositoryProvider,
                         );
-                        final currentUserProfile =
-                            currentUserProfileAsync.value;
-                        final currentUserId = currentUserProfile?.uid;
-                        final currentUserName = currentUserProfile?.name ?? '';
+                        final currentUserId = currentUserProfile.uid;
+                        final currentUserName = currentUserProfile.name;
                         if (friendship != null &&
                             friendship.status == FriendshipStatus.accepted) {
                           return _buildFriendActionButton(
@@ -209,19 +197,16 @@ class ViewProfileScreen extends ConsumerWidget {
                               context,
                               'Accept Request',
                               () async {
-                                if (currentUserId != null) {
-                                  await friendshipRepository
-                                      .acceptFriendRequest(
-                                        friendshipId: friendship.id,
-                                        currentUserId: currentUserId,
-                                        otherUserId: userId,
-                                        currentUserName: currentUserName,
-                                      );
-                                  showFloatingSnackBar(
-                                    context,
-                                    'You are now friends with ${profile.name}!',
-                                  );
-                                }
+                                await friendshipRepository.acceptFriendRequest(
+                                  friendshipId: friendship.id,
+                                  currentUserId: currentUserId,
+                                  otherUserId: userId,
+                                  currentUserName: currentUserName,
+                                );
+                                showFloatingSnackBar(
+                                  context,
+                                  'You are now friends with ${profile.name}!',
+                                );
                               },
                             );
                           }
@@ -230,17 +215,15 @@ class ViewProfileScreen extends ConsumerWidget {
                           context,
                           'BeFriend',
                           () async {
-                            if (currentUserId != null) {
-                              await friendshipRepository.sendFriendRequest(
-                                senderId: currentUserId,
-                                senderName: currentUserName,
-                                receiverId: userId,
-                              );
-                              showFloatingSnackBar(
-                                context,
-                                'Friend request sent to ${profile.name}.',
-                              );
-                            }
+                            await friendshipRepository.sendFriendRequest(
+                              senderId: currentUserId,
+                              senderName: currentUserName,
+                              receiverId: userId,
+                            );
+                            showFloatingSnackBar(
+                              context,
+                              'Friend request sent to ${profile.name}.',
+                            );
                           },
                           icon: '🫂',
                         );
@@ -281,7 +264,7 @@ class ViewProfileScreen extends ConsumerWidget {
                             children: [
                               if (hasBio)
                                 Text(
-                                  profile.shortBio!,
+                                  profile.shortBio,
                                   style: theme.textTheme.bodyLarge?.copyWith(
                                     color: theme.colorScheme.onSurface
                                         .withOpacity(0.8),
@@ -289,8 +272,7 @@ class ViewProfileScreen extends ConsumerWidget {
                                   ),
                                 ),
                               if (hasBio && hasTags) const SizedBox(height: 16),
-                              if (hasTags)
-                                InterestsSection(tags: profile.tags!),
+                              if (hasTags) InterestsSection(tags: profile.tags),
                             ],
                           ),
                         ),
@@ -354,7 +336,6 @@ class ViewProfileScreen extends ConsumerWidget {
     );
   }
 
-  // Updated `_buildFriendActionButton` with the refined gradient look
   Widget _buildFriendActionButton(
     BuildContext context,
     String text,
@@ -365,9 +346,8 @@ class ViewProfileScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final isBefriendButton = icon == '🫂';
 
-    // A more subtle and cohesive gradient
     const befriendGradient = LinearGradient(
-      colors: [Color(0xFF81C784), Color(0xFF66BB6A)], // A softer green
+      colors: [Color(0xFF81C784), Color(0xFF66BB6A)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     );
@@ -427,7 +407,7 @@ class ViewProfileScreen extends ConsumerWidget {
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
-                                fontSize: 18
+                                fontSize: 18,
                               ),
                             ),
                           ],
@@ -459,7 +439,7 @@ class ViewProfileScreen extends ConsumerWidget {
     BuildContext context,
     UserProfileModel profile,
     FriendshipRepository friendshipRepository,
-    String? currentUserId,
+    String currentUserId,
     String otherUserId,
   ) {
     final theme = Theme.of(context);
@@ -487,18 +467,16 @@ class ViewProfileScreen extends ConsumerWidget {
             foregroundColor: theme.colorScheme.onError,
           ),
           onPressed: () async {
-            if (currentUserId != null) {
-              await friendshipRepository.unfriend(
-                user1Id: currentUserId,
-                user2Id: otherUserId,
+            await friendshipRepository.unfriend(
+              user1Id: currentUserId,
+              user2Id: otherUserId,
+            );
+            if (context.mounted) {
+              Navigator.of(context).pop();
+              showFloatingSnackBar(
+                context,
+                'You have unfriended ${profile.name}.',
               );
-              if (context.mounted) {
-                Navigator.of(context).pop();
-                showFloatingSnackBar(
-                  context,
-                  'You have unfriended ${profile.name}.',
-                );
-              }
             }
           },
           child: const Text('Unfriend'),
