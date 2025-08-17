@@ -33,6 +33,10 @@
             android:value="AIzaSyBPnVhjs__D_FD9OTq2x4TfrDhXzTRohlA" />
 
         <meta-data
+            android:name="com.google.android.places.API_KEY"
+            android:value="AIzaSyCmom1vOzH73kkgxgPNMX-F65hSv2LKryI" />
+
+        <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>

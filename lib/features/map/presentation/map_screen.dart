@@ -5,7 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter_google_maps_webservices/places.dart';
+// REMOVED: This import is no longer needed since SearchBarWidget handles the details.
+// import 'package:flutter_google_maps_webservices/places.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:near_me/features/map/widgets/daily_friend_request_counter_widget.dart';
@@ -44,7 +45,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   BitmapDescriptor? _defaultMarker;
 
-  // Use `late` instead of `late final` because they might be re-initialized.
   late ProviderSubscription _disposeUserProfileListener;
   late ProviderSubscription _disposeUserLocationsListener;
   late ProviderSubscription _disposeAuthStateListener;
@@ -57,11 +57,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     super.initState();
     _setDefaultMarker();
 
-    // ✅ FIX: Call a new initialization method that sets up the listeners.
     _initializeListeners();
   }
 
-  // ✅ NEW METHOD: To set up all listeners once.
   void _initializeListeners() {
     _disposeAuthStateListener = ref.listenManual<AsyncValue<User?>>(
       authStateProvider,
@@ -133,7 +131,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // ✅ FIX: Remove the listener initialization from here to prevent the error.
   }
 
   @override
@@ -419,7 +416,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  void _onPlaceSelected(Prediction place) async {}
+  // REMOVED: The unused _onPlaceSelected function.
 
   void _handlePlaceSelected(LatLng location) {
     final mapController = ref.read(googleMapControllerProvider);

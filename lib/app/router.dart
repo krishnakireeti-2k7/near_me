@@ -12,7 +12,10 @@ import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/features/profile/presentation/edit_profile_screen.dart';
 import 'package:near_me/features/map/presentation/loading_screen.dart';
 import 'package:near_me/features/profile/presentation/friends_list_screen.dart';
-import 'package:flutter_google_maps_webservices/places.dart';
+// REMOVED: This import is no longer needed since you are using the new SDK.
+// import 'package:flutter_google_maps_webservices/places.dart';
+// NEW: Import the new places SDK to get the correct type.
+import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
@@ -154,7 +157,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/searchResults',
         builder: (context, state) {
           final data = state.extra as Map<String, dynamic>;
-          final places = data['places'] as List<Prediction>;
+          // CHANGED: Use AutocompletePrediction instead of Prediction
+          final places = data['places'] as List<AutocompletePrediction>;
           final users = data['users'] as List<UserProfileModel>;
           final query = data['query'] as String;
           return SearchResultsScreen(

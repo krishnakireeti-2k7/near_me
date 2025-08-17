@@ -1,26 +1,35 @@
 // file: lib/features/map/widgets/search_bar_widget.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter_google_maps_webservices/places.dart';
+import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart' as place_fields;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+
+// Corrected import to avoid conflict with LatLng from places SDK
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmf;
+
 import 'package:uuid/uuid.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
+// Corrected import to the public API of the Places SDK
+import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
+// Aliased import for PlaceField to avoid ambiguity with other packages
 
 const String googleApiKey = 'AIzaSyCmom1vOzH73kkgxgPNMX-F65hSv2LKryI';
 
 class SearchBarWidget extends ConsumerStatefulWidget {
-  final Function(LatLng)? onPlaceSelected;
+  // CORRECTED: Changed the type of LatLng to use the aliased one
+  final Function(gmf.LatLng)? onPlaceSelected;
   final Function(String)? onUserSearch;
   final BuildContext? scaffoldContext;
   final Function(bool)? onSearchToggled;
   final String? initialQuery;
   final bool autoFocus;
   final bool showDrawerButton;
-  final Function(List<Prediction>, List<UserProfileModel>)? onSearchUpdate;
+  // CHANGED: The type of the `onSearchUpdate` list to `AutocompletePrediction`
+  final Function(List<AutocompletePrediction>, List<UserProfileModel>)?
+  onSearchUpdate;
 
   const SearchBarWidget({
     super.key,
@@ -40,11 +49,11 @@ class SearchBarWidget extends ConsumerStatefulWidget {
 
 class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
   final TextEditingController _searchController = TextEditingController();
-  final places = GoogleMapsPlaces(apiKey: googleApiKey);
+  // CORRECTED: The FlutterGooglePlacesSdk constructor now requires an API key.
+  final placesSdk = FlutterGooglePlacesSdk(googleApiKey);
   final uuid = const Uuid();
 
-  String? _sessionToken;
-  List<Prediction> _placesSuggestions = [];
+  List<AutocompletePrediction> _placesSuggestions = [];
   List<UserProfileModel> _userSuggestions = [];
 
   void clearSuggestions() {
@@ -58,7 +67,6 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
   @override
   void initState() {
     super.initState();
-    _sessionToken = uuid.v4();
     if (widget.initialQuery != null) {
       _searchController.text = widget.initialQuery!;
     }
@@ -77,6 +85,7 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
     super.dispose();
   }
 
+  // CHANGED: The logic for getting place suggestions
   void _getPlacesSuggestions(String query) async {
     if (query.isEmpty) {
       if (mounted) {
@@ -85,45 +94,42 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
       return;
     }
 
-    if (_sessionToken == null) {
-      _sessionToken = uuid.v4();
-    }
-
-    final res = await places.autocomplete(
-      query,
-      sessionToken: _sessionToken,
-      language: "en",
-    );
-
-    if (res.isOkay) {
+    try {
+      final response = await placesSdk.findAutocompletePredictions(
+        query,
+        countries: ['us', 'in'],
+      );
       if (mounted) {
         setState(() {
-          _placesSuggestions = res.predictions!;
-          // Call the update callback to notify the parent
+          _placesSuggestions = response.predictions ?? [];
           widget.onSearchUpdate?.call(_placesSuggestions, _userSuggestions);
         });
       }
-    } else {
-      debugPrint('Google Places API Error: ${res.errorMessage}');
+    } catch (e) {
+      debugPrint('Google Places API Error: $e');
+      if (mounted) {
+        setState(() => _placesSuggestions = []);
+        widget.onSearchUpdate?.call(_placesSuggestions, _userSuggestions);
+      }
     }
   }
 
-  void _handlePlaceTap(Prediction place) async {
+  // CHANGED: The logic for handling place tap and getting details
+  void _handlePlaceTap(AutocompletePrediction place) async {
     _searchController.clear();
     FocusManager.instance.primaryFocus?.unfocus();
     widget.onSearchToggled?.call(false);
 
-    final placeDetails = await places.getDetailsByPlaceId(
-      place.placeId!,
-      sessionToken: _sessionToken,
+    // CORRECTED: Aliased PlaceField to resolve the "Undefined name 'google_place'" error
+    final placeDetails = await placesSdk.fetchPlace(
+      place.placeId,
+      fields: [place_fields.PlaceField.Location],
     );
-    _sessionToken = uuid.v4();
 
-    final geometry = placeDetails.result?.geometry;
-    if (geometry?.location != null) {
-      widget.onPlaceSelected?.call(
-        LatLng(geometry!.location.lat, geometry.location.lng),
-      );
+    final location = placeDetails.place?.latLng;
+    if (location != null) {
+      // CORRECTED: Use the aliased LatLng
+      widget.onPlaceSelected?.call(gmf.LatLng(location.lat, location.lng));
     }
   }
 
@@ -136,7 +142,6 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
             if (mounted) {
               setState(() {
                 _userSuggestions = users;
-                // Call the update callback to notify the parent
                 widget.onSearchUpdate?.call(
                   _placesSuggestions,
                   _userSuggestions,
@@ -148,7 +153,6 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
             debugPrint('Error searching users: $error');
             if (mounted) {
               setState(() => _userSuggestions = []);
-              // Call the update callback on error as well
               widget.onSearchUpdate?.call(_placesSuggestions, _userSuggestions);
             }
           });
@@ -157,7 +161,6 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
         setState(() {
           _placesSuggestions = [];
           _userSuggestions = [];
-          // Call the update callback for empty query
           widget.onSearchUpdate?.call(_placesSuggestions, _userSuggestions);
         });
       }
@@ -193,8 +196,7 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
                   onPressed:
                       () => Scaffold.of(widget.scaffoldContext!).openDrawer(),
                 ),
-              if (!widget
-                  .showDrawerButton) // Show back button on results screen
+              if (!widget.showDrawerButton)
                 IconButton(
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.of(context).pop(),
@@ -246,7 +248,7 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
                     ..._placesSuggestions.map((place) {
                       return ListTile(
                         leading: const Icon(Icons.location_on),
-                        title: Text(place.description ?? ''),
+                        title: Text(place.fullText ?? place.primaryText ?? ''),
                         onTap: () => _handlePlaceTap(place),
                       );
                     }).toList(),
@@ -280,7 +282,6 @@ class SearchBarWidgetState extends ConsumerState<SearchBarWidget> {
                       );
                     }).toList(),
                   ],
-                  // Corrected: The View All button is now a ListTile inside the ListView
                   if (_searchController.text.isNotEmpty)
                     ListTile(
                       title: const Text(
