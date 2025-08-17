@@ -1,17 +1,23 @@
 // file: lib/features/map/widgets/search_results_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter_google_maps_webservices/places.dart';
+import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart' as place_fields;
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+// Aliased `Maps_flutter` to avoid import conflicts with `flutter_google_places_sdk`.
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmf;
 import 'package:near_me/features/map/widgets/search_bar_widget.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:near_me/features/map/controller/map_controller.dart';
+// Correct import for the Google Places SDK.
+import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
+// Aliased import for PlaceField to avoid ambiguity with other packages.
+
+// The API key is now passed to the FlutterGooglePlacesSdk constructor.
 const String googleApiKey = 'AIzaSyCmom1vOzH73kkgxgPNMX-F65hSv2LKryI';
 
 class SearchResultsScreen extends ConsumerStatefulWidget {
-  final List<Prediction> places;
+  final List<AutocompletePrediction> places;
   final List<UserProfileModel> users;
   final String initialQuery;
 
@@ -28,7 +34,7 @@ class SearchResultsScreen extends ConsumerStatefulWidget {
 }
 
 class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
-  late List<Prediction> _places;
+  late List<AutocompletePrediction> _places;
   late List<UserProfileModel> _users;
   int _selectedIndex = 0;
 
@@ -39,7 +45,10 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
     _users = widget.users;
   }
 
-  void _onSearchUpdate(List<Prediction> places, List<UserProfileModel> users) {
+  void _onSearchUpdate(
+    List<AutocompletePrediction> places,
+    List<UserProfileModel> users,
+  ) {
     setState(() {
       _places = places;
       _users = users;
@@ -61,8 +70,7 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
                   child: SearchBarWidget(
                     initialQuery: widget.initialQuery,
                     autoFocus: true,
-                    showDrawerButton:
-                        false, // Prevents a redundant back button in the SearchBarWidget
+                    showDrawerButton: false,
                     onSearchUpdate: _onSearchUpdate,
                   ),
                 ),
@@ -70,9 +78,6 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
             ),
           ),
 
-          // This single Padding now controls the spacing for the toggle buttons.
-          // 'top: 24.0' creates a large gap from the search bar.
-          // 'bottom: 8.0' creates a small, clean gap to the search results.
           Padding(
             padding: const EdgeInsets.only(left: 16.0, top: 24.0, bottom: 8.0),
             child: Container(
@@ -80,7 +85,6 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
                 color: Colors.grey[200],
                 borderRadius: BorderRadius.circular(20),
               ),
-              // The internal vertical padding is kept at 4.0 to make the buttons look correct.
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -100,18 +104,25 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
                       context,
                       _places,
                       (prediction) async {
-                        final placesApi = GoogleMapsPlaces(
-                          apiKey: googleApiKey,
-                        );
-                        final details = await placesApi.getDetailsByPlaceId(
-                          prediction.placeId!,
-                        );
-                        final location = details.result.geometry?.location;
-                        if (location != null) {
-                          ref
-                              .read(googleMapControllerProvider.notifier)
-                              .moveCamera(LatLng(location.lat, location.lng));
-                          GoRouter.of(context).pop();
+                        // Instantiating the Places SDK with the API key
+                        final placesApi = FlutterGooglePlacesSdk(googleApiKey);
+                        try {
+                          final details = await placesApi.fetchPlace(
+                            prediction.placeId,
+                            fields: [place_fields.PlaceField.Location],
+                          );
+                          final location = details.place?.latLng;
+                          if (location != null) {
+                            // Using the aliased `LatLng` from `Maps_flutter`.
+                            ref
+                                .read(googleMapControllerProvider.notifier)
+                                .moveCamera(
+                                  gmf.LatLng(location.lat, location.lng),
+                                );
+                            GoRouter.of(context).pop();
+                          }
+                        } catch (e) {
+                          debugPrint('Error fetching place details: $e');
                         }
                       },
                       (prediction) => ListTile(
@@ -119,7 +130,11 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
                           Icons.place,
                           color: Colors.blueAccent,
                         ),
-                        title: Text(prediction.description ?? 'No Description'),
+                        title: Text(
+                          prediction.fullText ??
+                              prediction.primaryText ??
+                              'No Description',
+                        ),
                       ),
                     )
                     : _buildResultsList(
@@ -204,4 +219,4 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
       },
     );
   }
-} 
+}

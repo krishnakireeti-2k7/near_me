@@ -48,7 +48,7 @@ dependencies:
   firebase_messaging: ^15.2.10
   flutter_local_notifications: ^19.4.0
   uuid: ^4.3.3
-  flutter_google_maps_webservices: ^1.1.1
+  flutter_google_places_sdk: ^0.4.2+1
   collection: ^1.18.0
 
 
