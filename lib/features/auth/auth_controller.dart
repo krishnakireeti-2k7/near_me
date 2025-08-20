@@ -1,12 +1,9 @@
-// file: lib/features/auth/auth_controller.dart
-
-import 'package:cloud_firestore/cloud_firestore.dart'; // Keep if used elsewhere, otherwise can remove
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart'; // Keep if used elsewhere, otherwise can remove
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'auth_repository.dart';
-import 'package:near_me/services/notification_service.dart'; // Keep this import, even if not directly used in AuthController itself,
-// it's good for overall project structure knowledge.
+import 'package:near_me/services/notification_service.dart';
 
 // Repository provider
 final authRepositoryProvider = Provider((ref) => AuthRepository());
@@ -17,6 +14,9 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return repo.authStateChanges();
 });
 
+// ✅ NEW: Add a provider to track if a profile has been created
+final profileCreationStatusProvider = StateProvider<bool>((ref) => false);
+
 // Auth controller for sign-in / sign-out
 final authControllerProvider = Provider<AuthController>((ref) {
   final repo = ref.watch(authRepositoryProvider);
@@ -26,8 +26,6 @@ final authControllerProvider = Provider<AuthController>((ref) {
 class AuthController {
   final AuthRepository _repo;
   AuthController(this._repo);
-
-  // REMOVE THE ENTIRE initPushNotifications() METHOD FROM HERE
 
   Future<void> signInWithGoogle() => _repo.signInWithGoogle();
   Future<void> signOut() => _repo.signOut();

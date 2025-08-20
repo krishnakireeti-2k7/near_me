@@ -1,4 +1,3 @@
-// file: lib/app/router.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -12,18 +11,14 @@ import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/features/profile/presentation/edit_profile_screen.dart';
 import 'package:near_me/features/map/presentation/loading_screen.dart';
 import 'package:near_me/features/profile/presentation/friends_list_screen.dart';
-// REMOVED: This import is no longer needed since you are using the new SDK.
-// import 'package:flutter_google_maps_webservices/places.dart';
-// NEW: Import the new places SDK to get the correct type.
 import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
-// Combined provider for auth and profile state
+// ✅ NEW: Simplified bootstrapperProvider. It only checks authentication status.
 final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
   final authAsync = ref.watch(authStateProvider);
-
   if (authAsync.isLoading) {
     yield {'status': 'loading'};
     return;
@@ -32,36 +27,25 @@ final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
   final user = authAsync.value;
   if (user == null) {
     yield {'status': 'unauthenticated'};
-    return;
-  }
-
-  // Watch profile stream, but only yield significant changes
-  String? lastUid;
-  await for (final userProfile in ref.watch(
-    currentUserProfileStreamProvider.stream,
-  )) {
-    // Avoid yielding if only location or minor fields changed
-    if (userProfile != null && userProfile.uid == lastUid) {
-      continue; // Skip updates for same profile to prevent navigation resets
-    }
-    lastUid = userProfile?.uid;
-
-    if (userProfile == null) {
-      yield {'status': 'needs-profile', 'user': user};
-    } else {
-      yield {'status': 'authenticated', 'user': user, 'profile': userProfile};
-    }
+  } else {
+    yield {'status': 'authenticated', 'user': user};
   }
 });
 
 class BootstrapperChangeNotifier extends ChangeNotifier {
   BootstrapperChangeNotifier(this.ref) {
+    // Listen to the main auth state
     ref.listen<AsyncValue<Map<String, dynamic>>>(bootstrapperProvider, (
       previous,
       next,
     ) {
-      // Only notify on status changes or initial load
       if (previous?.value?['status'] != next.value?['status']) {
+        notifyListeners();
+      }
+    });
+    // ✅ NEW: Listen to the profile creation status flag
+    ref.listen<bool>(profileCreationStatusProvider, (previous, next) {
+      if (previous != next) {
         notifyListeners();
       }
     });
@@ -78,25 +62,27 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: bootstrapperNotifier,
     redirect: (context, state) {
       final bootstrapper = ref.read(bootstrapperProvider);
+      // ✅ NEW: Read the profile creation status directly
+      final profileCreated = ref.watch(profileCreationStatusProvider);
 
       if (bootstrapper.isLoading) {
-        return '/'; // Stay on loading screen during initial load
+        return '/';
       }
 
       final status = bootstrapper.asData?.value['status'];
+      final user = bootstrapper.asData?.value['user'];
 
       if (status == 'unauthenticated') {
         return state.matchedLocation != '/login' ? '/login' : null;
       }
 
-      if (status == 'needs-profile') {
-        final isCreatingOrEditingProfile =
-            state.matchedLocation == '/create-profile' ||
-            state.matchedLocation.startsWith('/edit-profile');
-        return !isCreatingOrEditingProfile ? '/create-profile' : null;
+      // ✅ MODIFIED: Use the new state provider for redirect logic
+      if (status == 'authenticated' && !profileCreated) {
+        final isCreatingProfile = state.matchedLocation == '/create-profile';
+        return !isCreatingProfile ? '/create-profile' : null;
       }
 
-      if (status == 'authenticated') {
+      if (status == 'authenticated' && profileCreated) {
         final isAuthRoute =
             state.matchedLocation == '/login' ||
             state.matchedLocation == '/create-profile' ||
@@ -157,7 +143,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/searchResults',
         builder: (context, state) {
           final data = state.extra as Map<String, dynamic>;
-          // CHANGED: Use AutocompletePrediction instead of Prediction
           final places = data['places'] as List<AutocompletePrediction>;
           final users = data['users'] as List<UserProfileModel>;
           final query = data['query'] as String;

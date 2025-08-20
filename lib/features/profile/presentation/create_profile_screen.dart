@@ -1,5 +1,3 @@
-// lib/features/profile/presentation/create_profile_screen.dart
-
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -40,14 +38,9 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
   File? _profileImage;
   bool isLoading = false;
 
-  // REMOVED: _userLatitude and _userLongitude are no longer needed as state variables.
-  // The location will be fetched directly in the _submitProfile method.
-
   @override
   void initState() {
     super.initState();
-    // REMOVED: _getUserLocation() call from initState.
-    // The location is now fetched on demand during profile submission.
   }
 
   Future<void> _pickImage() async {
@@ -94,14 +87,12 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
       return;
     }
 
-    // NEW: Fetch user location here, right before submitting the profile.
     Position? userLocation;
     try {
       userLocation =
           await ref.read(locationServiceProvider).getCurrentLocation();
     } catch (e) {
       debugPrint("Error getting location: $e");
-      // Show an error to the user if location permission is denied
       if (context.mounted) {
         showFloatingSnackBar(
           context,
@@ -164,11 +155,11 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
 
       await profileRepo.createOrUpdateProfile(profile);
 
-      ref.invalidate(userProfileProvider(user.uid));
+      // ✅ NEW: Update the new state provider to signal the router.
+      ref.read(profileCreationStatusProvider.notifier).state = true;
 
       setState(() => isLoading = false);
       showFloatingSnackBar(context, "Profile created successfully!");
-      GoRouter.of(context).go('/map');
     } catch (e, stackTrace) {
       debugPrint('Error saving profile: $e');
       debugPrint('Stack Trace: $stackTrace');
