@@ -15,8 +15,9 @@ class UserProfileModel {
   final Timestamp? lastActive;
   final String? fcmToken;
   final int totalInterestsCount;
+  final int totalFriendRequestsCount; // Added field
   final bool isGhostModeEnabled;
-  final List<String> friends; // ✅ NEW FIELD
+  final List<String> friends;
 
   UserProfileModel({
     required this.uid,
@@ -30,8 +31,9 @@ class UserProfileModel {
     this.lastActive,
     this.fcmToken,
     this.totalInterestsCount = 0,
+    this.totalFriendRequestsCount = 0, // Initialize new field
     this.isGhostModeEnabled = false,
-    this.friends = const [], // ✅ NEW: Default to empty list
+    this.friends = const [],
   });
 
   Map<String, dynamic> toMap() {
@@ -47,8 +49,9 @@ class UserProfileModel {
       'lastActive': lastActive,
       'fcmToken': fcmToken,
       'totalInterestsCount': totalInterestsCount,
+      'totalFriendRequestsCount': totalFriendRequestsCount, // Added
       'isGhostModeEnabled': isGhostModeEnabled,
-      'friends': friends, // ✅ NEW
+      'friends': friends,
     };
   }
 
@@ -68,11 +71,10 @@ class UserProfileModel {
       lastActive: map['lastActive'] as Timestamp?,
       fcmToken: map['fcmToken'] as String?,
       totalInterestsCount: map['totalInterestsCount'] as int? ?? 0,
+      totalFriendRequestsCount:
+          map['totalFriendRequestsCount'] as int? ?? 0, // Added
       isGhostModeEnabled: map['isGhostModeEnabled'] as bool? ?? false,
-      friends:
-          map['friends'] != null
-              ? List<String>.from(map['friends'])
-              : [], // ✅ NEW: Handle null for older documents
+      friends: map['friends'] != null ? List<String>.from(map['friends']) : [],
     );
   }
 
@@ -89,8 +91,9 @@ class UserProfileModel {
       lastActive: null,
       fcmToken: null,
       totalInterestsCount: 0,
+      totalFriendRequestsCount: 0, // Added
       isGhostModeEnabled: false,
-      friends: const [], // ✅ NEW
+      friends: const [],
     );
   }
 
@@ -106,8 +109,9 @@ class UserProfileModel {
     Timestamp? lastActive,
     String? fcmToken,
     int? totalInterestsCount,
+    int? totalFriendRequestsCount, // Added
     bool? isGhostModeEnabled,
-    List<String>? friends, // ✅ NEW
+    List<String>? friends,
   }) {
     return UserProfileModel(
       uid: uid ?? this.uid,
@@ -121,8 +125,10 @@ class UserProfileModel {
       lastActive: lastActive ?? this.lastActive,
       fcmToken: fcmToken ?? this.fcmToken,
       totalInterestsCount: totalInterestsCount ?? this.totalInterestsCount,
+      totalFriendRequestsCount:
+          totalFriendRequestsCount ?? this.totalFriendRequestsCount, // Added
       isGhostModeEnabled: isGhostModeEnabled ?? this.isGhostModeEnabled,
-      friends: friends ?? this.friends, // ✅ NEW
+      friends: friends ?? this.friends,
     );
   }
 }

@@ -1,139 +1,161 @@
-// file: lib/features/profile/repository/friendship_repository.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:near_me/features/profile/model/friendship_model.dart';
 import 'package:near_me/services/notification_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class FriendshipRepository {
   final FirebaseFirestore _firestore;
-  // ✅ NEW: Add the outgoing notification service dependency
-  final OutgoingNotificationService _outgoingNotificationService;
+  final Ref _ref;
 
-  FriendshipRepository({
-    required FirebaseFirestore firestore,
-    // ✅ NEW: Add to the constructor
-    required OutgoingNotificationService outgoingNotificationService,
-  }) : _firestore = firestore,
-       _outgoingNotificationService = outgoingNotificationService;
+  FriendshipRepository({required FirebaseFirestore firestore, required Ref ref})
+    : _firestore = firestore,
+      _ref = ref;
 
-  // ✅ NEW: Helper method to send the friend request notification
-  Future<void> _sendRequestNotification(
-    String senderName,
-    String receiverId,
-  ) async {
-    final receiverProfile =
-        await _firestore.collection('users').doc(receiverId).get();
-    final receiverFcmToken = receiverProfile.data()?['fcmToken'] as String?;
-
-    if (receiverFcmToken != null) {
-      await _outgoingNotificationService.sendNotification(
-        recipientToken: receiverFcmToken,
-        title: 'New Friend Request!',
-        body: '$senderName wants to be friends!',
-        data: {'screen': 'notifications'},
-      );
-    }
-  }
-
-  // ✅ NEW: Helper method to send the friend accepted notification
-  Future<void> _sendAcceptNotification(
-    String accepterName,
-    String otherUserId,
-  ) async {
-    final otherUserProfile =
-        await _firestore.collection('users').doc(otherUserId).get();
-    final otherUserFcmToken = otherUserProfile.data()?['fcmToken'] as String?;
-
-    if (otherUserFcmToken != null) {
-      await _outgoingNotificationService.sendNotification(
-        recipientToken: otherUserFcmToken,
-        title: 'Friend Request Accepted!',
-        body: '$accepterName is now your friend!',
-        data: {'screen': 'friends'},
-      );
-    }
-  }
-
-  // Sends a friend request by creating a new document in the 'friendships' collection.
   Future<void> sendFriendRequest({
     required String senderId,
-    // ✅ NEW: Add senderName for the notification body
     required String senderName,
     required String receiverId,
   }) async {
-    final userIds = [senderId, receiverId]..sort();
-    final friendshipId = userIds.join('_');
+    try {
+      final userIds = [senderId, receiverId]..sort();
+      final friendshipId = userIds.join('_');
 
-    final friendshipDoc = _firestore
-        .collection('friendships')
-        .doc(friendshipId);
+      final friendshipDoc = _firestore
+          .collection('friendships')
+          .doc(friendshipId);
 
-    final newFriendship = FriendshipModel(
-      id: friendshipId,
-      user1Id: userIds[0],
-      user2Id: userIds[1],
-      senderId: senderId,
-      status: FriendshipStatus.pending,
-      timestamp: Timestamp.now(),
-    );
+      final newFriendship = FriendshipModel(
+        id: friendshipId,
+        user1Id: userIds[0],
+        user2Id: userIds[1],
+        senderId: senderId,
+        status: FriendshipStatus.pending,
+        timestamp: Timestamp.now(),
+      );
 
-    await friendshipDoc.set(newFriendship.toMap());
+      await friendshipDoc.set(newFriendship.toMap());
+      debugPrint('FriendshipRepository: Friend request sent: $friendshipId');
 
-    // ✅ NEW: Call the notification helper method
-    await _sendRequestNotification(senderName, receiverId);
+      // Increment totalFriendRequestsCount
+      final recipientRef = _firestore.collection('users').doc(receiverId);
+      try {
+        await recipientRef.update({
+          'totalFriendRequestsCount': FieldValue.increment(1),
+        });
+        debugPrint(
+          'FriendshipRepository: Incremented totalFriendRequestsCount for user: $receiverId',
+        );
+      } catch (e) {
+        debugPrint(
+          'FriendshipRepository: Failed to update totalFriendRequestsCount, setting initial value: $e',
+        );
+        await recipientRef.set({
+          'totalFriendRequestsCount': 1,
+        }, SetOptions(merge: true));
+      }
+
+      // Send notification via OutgoingNotificationService
+      final recipientDoc =
+          await _firestore.collection('users').doc(receiverId).get();
+      final fcmToken = recipientDoc.data()?['fcmToken'] as String?;
+
+      if (fcmToken != null) {
+        debugPrint(
+          'FriendshipRepository: Sending friend request notification to: $receiverId, token: $fcmToken',
+        );
+        await _ref
+            .read(outgoingNotificationServiceProvider)
+            .sendNotification(
+              recipientToken: fcmToken,
+              title: 'New Friend Request!',
+              body: '$senderName wants to be friends!',
+              data: {'screen': 'notifications'},
+            );
+      } else {
+        debugPrint('FriendshipRepository: No FCM token for user: $receiverId');
+      }
+    } catch (e) {
+      debugPrint('FriendshipRepository: Error sending friend request: $e');
+      rethrow;
+    }
   }
 
-  // Accepts a friend request and updates the 'friends' list for both users.
   Future<void> acceptFriendRequest({
     required String friendshipId,
     required String currentUserId,
     required String otherUserId,
-    // ✅ NEW: Add currentUserName for the notification body
     required String currentUserName,
   }) async {
-    final friendshipDoc = _firestore
-        .collection('friendships')
-        .doc(friendshipId);
-    await friendshipDoc.update({
-      'status': FriendshipStatus.accepted.name,
-      'timestamp': Timestamp.now(),
-    });
+    try {
+      final friendshipDoc = _firestore
+          .collection('friendships')
+          .doc(friendshipId);
+      await friendshipDoc.update({
+        'status': FriendshipStatus.accepted.name,
+        'timestamp': Timestamp.now(),
+      });
 
-    // Add each user's UID to the other's friends list
-    await _firestore.collection('users').doc(currentUserId).update({
-      'friends': FieldValue.arrayUnion([otherUserId]),
-    });
-    await _firestore.collection('users').doc(otherUserId).update({
-      'friends': FieldValue.arrayUnion([currentUserId]),
-    });
+      await _firestore.collection('users').doc(currentUserId).update({
+        'friends': FieldValue.arrayUnion([otherUserId]),
+        'totalFriendRequestsCount': FieldValue.increment(-1),
+      });
+      await _firestore.collection('users').doc(otherUserId).update({
+        'friends': FieldValue.arrayUnion([currentUserId]),
+      });
 
-    // ✅ NEW: Call the notification helper method
-    await _sendAcceptNotification(currentUserName, otherUserId);
+      // Send notification via OutgoingNotificationService
+      final otherUserDoc =
+          await _firestore.collection('users').doc(otherUserId).get();
+      final fcmToken = otherUserDoc.data()?['fcmToken'] as String?;
+
+      if (fcmToken != null) {
+        debugPrint(
+          'FriendshipRepository: Sending accept notification to: $otherUserId, token: $fcmToken',
+        );
+        await _ref
+            .read(outgoingNotificationServiceProvider)
+            .sendNotification(
+              recipientToken: fcmToken,
+              title: 'Friend Request Accepted!',
+              body: '$currentUserName is now your friend!',
+              data: {'screen': 'friends'},
+            );
+      } else {
+        debugPrint('FriendshipRepository: No FCM token for user: $otherUserId');
+      }
+    } catch (e) {
+      debugPrint('FriendshipRepository: Error accepting friend request: $e');
+      rethrow;
+    }
   }
 
-  // Unfriends a user by deleting the friendship document and updating friends lists.
   Future<void> unfriend({
     required String user1Id,
     required String user2Id,
   }) async {
-    final userIds = [user1Id, user2Id]..sort();
-    final friendshipId = userIds.join('_');
-    final friendshipDoc = _firestore
-        .collection('friendships')
-        .doc(friendshipId);
+    try {
+      final userIds = [user1Id, user2Id]..sort();
+      final friendshipId = userIds.join('_');
+      final friendshipDoc = _firestore
+          .collection('friendships')
+          .doc(friendshipId);
 
-    await friendshipDoc.delete();
+      await friendshipDoc.delete();
 
-    await _firestore.collection('users').doc(user1Id).update({
-      'friends': FieldValue.arrayRemove([user2Id]),
-    });
-    await _firestore.collection('users').doc(user2Id).update({
-      'friends': FieldValue.arrayRemove([user1Id]),
-    });
+      await _firestore.collection('users').doc(user1Id).update({
+        'friends': FieldValue.arrayRemove([user2Id]),
+      });
+      await _firestore.collection('users').doc(user2Id).update({
+        'friends': FieldValue.arrayRemove([user1Id]),
+      });
+      debugPrint('FriendshipRepository: Unfriended: $friendshipId');
+    } catch (e) {
+      debugPrint('FriendshipRepository: Error unfriending: $e');
+      rethrow;
+    }
   }
 
-  // Gets the friendship status between two users.
   Stream<FriendshipModel?> getFriendshipStatusStream({
     required String currentUserId,
     required String otherUserId,
@@ -173,11 +195,9 @@ class FriendshipRepository {
         });
   }
 
-  // ✅ NEW METHOD: Gets the count of pending friend requests from today.
   Stream<List<FriendshipModel>> getDailyPendingFriendRequestsStream(
     String currentUserId,
   ) {
-    // Get the timestamp for the start of today
     final startOfToday = DateTime.now().copyWith(
       hour: 0,
       minute: 0,
@@ -189,7 +209,7 @@ class FriendshipRepository {
 
     return _firestore
         .collection('friendships')
-        .where('user2Id', isEqualTo: currentUserId) // 👈 This is the key change
+        .where('user2Id', isEqualTo: currentUserId)
         .where('status', isEqualTo: FriendshipStatus.pending.name)
         .where('timestamp', isGreaterThanOrEqualTo: startOfTodayTimestamp)
         .snapshots()
@@ -202,9 +222,25 @@ class FriendshipRepository {
 
   Future<void> deleteFriendRequest(String friendshipId) async {
     try {
-      await _firestore.collection('friendships').doc(friendshipId).delete();
+      final friendshipDoc = _firestore
+          .collection('friendships')
+          .doc(friendshipId);
+      final friendship = await friendshipDoc.get();
+      final receiverId = friendship.data()?['user2Id'] as String?;
+
+      await friendshipDoc.delete();
+      debugPrint('FriendshipRepository: Friend request deleted: $friendshipId');
+
+      if (receiverId != null) {
+        await _firestore.collection('users').doc(receiverId).update({
+          'totalFriendRequestsCount': FieldValue.increment(-1),
+        });
+        debugPrint(
+          'FriendshipRepository: Decremented totalFriendRequestsCount for user: $receiverId',
+        );
+      }
     } catch (e) {
-      debugPrint('Error deleting friend request: $e');
+      debugPrint('FriendshipRepository: Error deleting friend request: $e');
       rethrow;
     }
   }

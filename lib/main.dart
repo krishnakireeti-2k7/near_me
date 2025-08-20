@@ -1,4 +1,3 @@
-// file: lib/main.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +11,8 @@ import 'package:near_me/services/local_interests_service.dart';
 import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:near_me/services/notification_service.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +35,10 @@ class MyApp extends ConsumerWidget {
       title: 'NearMe',
       debugShowCheckedModeBanner: false,
       routerConfig: ref.watch(routerProvider),
-      builder: (context, child) => InterestNotificationHandler(child: child!),
+      builder:
+          (context, child) => FriendRequestNotificationHandler(
+            child: InterestNotificationHandler(child: child!),
+          ),
     );
   }
 }
@@ -63,48 +67,120 @@ class _InterestNotificationHandlerState
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<AsyncValue<UserProfileModel?>>(
-      currentUserProfileStreamProvider,
-      (previous, next) async {
-        final newProfile = next.value;
+    ref.listen<
+      AsyncValue<UserProfileModel?>
+    >(currentUserProfileStreamProvider, (previous, next) async {
+      final newProfile = next.value;
+      debugPrint(
+        'InterestNotificationHandler: Profile update: ${next.value?.toMap()}',
+      );
+      if (newProfile != null && newProfile.uid.isNotEmpty) {
+        if (_previousTotalInterestsCount == null) {
+          _previousTotalInterestsCount = newProfile.totalInterestsCount;
+          debugPrint(
+            'InterestNotificationHandler: Initial totalInterestsCount: $_previousTotalInterestsCount',
+          );
+        }
 
-        if (newProfile != null && newProfile.uid.isNotEmpty) {
-          if (_previousTotalInterestsCount == null) {
-            _previousTotalInterestsCount = newProfile.totalInterestsCount;
-            debugPrint(
-              'Initial totalInterestsCount: $_previousTotalInterestsCount',
+        if (newProfile.totalInterestsCount >
+            (_previousTotalInterestsCount ?? 0)) {
+          if (context.mounted) {
+            showFloatingSnackBar(
+              context,
+              'Someone is interested in you!',
+              backgroundColor: Colors.amber.shade700,
+              textColor: Colors.white,
+              leadingIcon: Icons.whatshot,
+              duration: const Duration(seconds: 3),
+              position: SnackBarPosition.top,
             );
           }
 
-          if (newProfile.totalInterestsCount >
-              (_previousTotalInterestsCount ?? 0)) {
-            if (context.mounted) {
-              showFloatingSnackBar(
-                context,
-                'Someone is interested in you!',
-                backgroundColor: Colors.amber.shade700,
-                textColor: Colors.white,
-                leadingIcon: Icons.whatshot,
-                duration: const Duration(seconds: 3),
-                position: SnackBarPosition.top,
-              );
-            }
-
-            await ref
-                .read(localInterestsServiceProvider)
-                .incrementDailyInterestsCount();
-            debugPrint('Local daily interests count incremented!');
-          }
-
-          _previousTotalInterestsCount = newProfile.totalInterestsCount;
-        } else if (newProfile == null && _previousTotalInterestsCount != null) {
-          _previousTotalInterestsCount = null;
+          await ref
+              .read(localInterestsServiceProvider)
+              .incrementDailyInterestsCount();
           debugPrint(
-            'User logged out or profile became null, resetting previous count.',
+            'InterestNotificationHandler: Local daily interests count incremented!',
           );
         }
-      },
-    );
+
+        _previousTotalInterestsCount = newProfile.totalInterestsCount;
+      } else if (newProfile == null && _previousTotalInterestsCount != null) {
+        _previousTotalInterestsCount = null;
+        debugPrint(
+          'InterestNotificationHandler: User logged out or profile became null, resetting previous count.',
+        );
+      }
+    });
+
+    return widget.child;
+  }
+}
+
+class FriendRequestNotificationHandler extends ConsumerStatefulWidget {
+  final Widget child;
+
+  const FriendRequestNotificationHandler({super.key, required this.child});
+
+  @override
+  ConsumerState<FriendRequestNotificationHandler> createState() =>
+      _FriendRequestNotificationHandlerState();
+}
+
+class _FriendRequestNotificationHandlerState
+    extends ConsumerState<FriendRequestNotificationHandler> {
+  int? _previousTotalFriendRequestsCount;
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<
+      AsyncValue<UserProfileModel?>
+    >(currentUserProfileStreamProvider, (previous, next) async {
+      debugPrint(
+        'FriendRequestNotificationHandler: Profile update: ${next.value?.toMap()}',
+      );
+      if (next.hasError) {
+        debugPrint('FriendRequestNotificationHandler: Error: ${next.error}');
+        return;
+      }
+
+      final newProfile = next.value;
+      if (newProfile != null && newProfile.uid.isNotEmpty) {
+        if (_previousTotalFriendRequestsCount == null) {
+          _previousTotalFriendRequestsCount =
+              newProfile.totalFriendRequestsCount;
+          debugPrint(
+            'FriendRequestNotificationHandler: Initial totalFriendRequestsCount: $_previousTotalFriendRequestsCount',
+          );
+        }
+
+        if (newProfile.totalFriendRequestsCount >
+            (_previousTotalFriendRequestsCount ?? 0)) {
+          if (context.mounted) {
+            showFloatingSnackBar(
+              context,
+              'You have a new friend request!',
+              backgroundColor: Colors.blue.shade700,
+              textColor: Colors.white,
+              leadingIcon: Icons.person_add,
+              duration: const Duration(seconds: 3),
+              position: SnackBarPosition.top,
+            );
+            debugPrint(
+              'FriendRequestNotificationHandler: Friend request snackbar shown!',
+            );
+          }
+        }
+
+        _previousTotalFriendRequestsCount = newProfile.totalFriendRequestsCount;
+      } else if (newProfile == null &&
+          _previousTotalFriendRequestsCount != null) {
+        _previousTotalFriendRequestsCount = null;
+        debugPrint(
+          'FriendRequestNotificationHandler: User logged out or profile became null, resetting previous count.',
+        );
+      }
+    });
 
     return widget.child;
   }

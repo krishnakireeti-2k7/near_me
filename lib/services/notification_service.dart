@@ -1,24 +1,17 @@
-// file: lib/services/notification_service.dart
-
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// ✅ NEW: Import for sending notifications
 import 'package:http/http.dart' as http;
-// ✅ NEW: Import for encoding data
 import 'dart:convert';
-import 'package:flutter/foundation.dart'; // To use debugPrint
+import 'package:flutter/foundation.dart';
 
 final notificationServiceProvider = Provider((ref) => NotificationService(ref));
-
-// ✅ NEW: Provider for the outgoing notification service
 final outgoingNotificationServiceProvider = Provider(
   (ref) => OutgoingNotificationService(),
 );
 
-// Your existing NotificationService class for INCOMING notifications
 class NotificationService {
   final Ref _ref;
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
@@ -65,7 +58,7 @@ class NotificationService {
         debugPrint('NotificationService: FCM Token is null, cannot save.');
       }
 
-      // 4. Handle foreground messages
+      // Handle foreground messages
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         debugPrint(
           'NotificationService: Got a message whilst in the foreground!',
@@ -141,10 +134,10 @@ class NotificationService {
   }
 }
 
-// ✅ NEW: Class for OUTGOING notifications
 class OutgoingNotificationService {
-  // IMPORTANT: Replace with your Cloud Function URL
-  final String _cloudFunctionUrl = 'YOUR_CLOUD_FUNCTION_URL';
+  // Replace with your HTTPS Cloud Function URL
+  final String _cloudFunctionUrl =
+      'https://us-central1-nearme-ebdb8.cloudfunctions.net/sendNotification';
 
   Future<void> sendNotification({
     required String recipientToken,
@@ -163,15 +156,19 @@ class OutgoingNotificationService {
       final response = await http.post(
         Uri.parse(_cloudFunctionUrl),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode(notificationData),
+        body: jsonEncode(notificationData),
       );
       if (response.statusCode != 200) {
-        debugPrint('Failed to send notification: ${response.body}');
+        debugPrint(
+          'OutgoingNotificationService: Failed to send notification: ${response.statusCode}, ${response.body}',
+        );
       } else {
-        debugPrint('Notification successfully sent!');
+        debugPrint(
+          'OutgoingNotificationService: Notification successfully sent!',
+        );
       }
     } catch (e) {
-      debugPrint('Error sending notification: $e');
+      debugPrint('OutgoingNotificationService: Error sending notification: $e');
     }
   }
 }
