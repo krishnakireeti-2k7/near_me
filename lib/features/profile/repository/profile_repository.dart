@@ -15,6 +15,12 @@ class ProfileRepository {
   }) : _firestore = firestore,
        _auth = auth;
 
+  // ✅ NEW METHOD: Checks if the user's profile document exists
+  Future<bool> profileExists(String uid) async {
+    final docSnapshot = await _firestore.collection('users').doc(uid).get();
+    return docSnapshot.exists;
+  }
+
   Future<void> createOrUpdateProfile(UserProfileModel profile) async {
     await _firestore
         .collection('users')
@@ -181,7 +187,6 @@ class ProfileRepository {
         .toList();
   }
 
-  // NEW METHOD: This is the fix for your error
   Future<void> updateGhostModeStatus(
     String userId,
     bool isGhostModeEnabled,

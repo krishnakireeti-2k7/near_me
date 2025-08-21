@@ -1,3 +1,5 @@
+// file: lib/app/router.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -16,7 +18,7 @@ import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
-// ✅ NEW: Simplified bootstrapperProvider. It only checks authentication status.
+// ✅ NEW: This provider checks both auth state and profile existence from Firestore
 final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
   final authAsync = ref.watch(authStateProvider);
   if (authAsync.isLoading) {
@@ -27,6 +29,15 @@ final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
   final user = authAsync.value;
   if (user == null) {
     yield {'status': 'unauthenticated'};
+    return;
+  }
+
+  // ✅ NEW: Check for an existing user profile in Firestore
+  final profileExists = await ref
+      .read(profileRepositoryProvider)
+      .profileExists(user.uid);
+  if (!profileExists) {
+    yield {'status': 'needs-profile', 'user': user};
   } else {
     yield {'status': 'authenticated', 'user': user};
   }
@@ -34,7 +45,6 @@ final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
 
 class BootstrapperChangeNotifier extends ChangeNotifier {
   BootstrapperChangeNotifier(this.ref) {
-    // Listen to the main auth state
     ref.listen<AsyncValue<Map<String, dynamic>>>(bootstrapperProvider, (
       previous,
       next,
@@ -43,12 +53,12 @@ class BootstrapperChangeNotifier extends ChangeNotifier {
         notifyListeners();
       }
     });
-    // ✅ NEW: Listen to the profile creation status flag
-    ref.listen<bool>(profileCreationStatusProvider, (previous, next) {
-      if (previous != next) {
-        notifyListeners();
-      }
-    });
+    // ✅ REMOVED: No longer needed as we are checking the database directly
+    // ref.listen<bool>(profileCreationStatusProvider, (previous, next) {
+    //   if (previous != next) {
+    //     notifyListeners();
+    //   }
+    // });
   }
 
   final Ref ref;
@@ -62,27 +72,24 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: bootstrapperNotifier,
     redirect: (context, state) {
       final bootstrapper = ref.read(bootstrapperProvider);
-      // ✅ NEW: Read the profile creation status directly
-      final profileCreated = ref.watch(profileCreationStatusProvider);
 
       if (bootstrapper.isLoading) {
         return '/';
       }
 
       final status = bootstrapper.asData?.value['status'];
-      final user = bootstrapper.asData?.value['user'];
 
       if (status == 'unauthenticated') {
         return state.matchedLocation != '/login' ? '/login' : null;
       }
 
-      // ✅ MODIFIED: Use the new state provider for redirect logic
-      if (status == 'authenticated' && !profileCreated) {
+      // ✅ MODIFIED: Redirect based on the persistent profile check
+      if (status == 'needs-profile') {
         final isCreatingProfile = state.matchedLocation == '/create-profile';
         return !isCreatingProfile ? '/create-profile' : null;
       }
 
-      if (status == 'authenticated' && profileCreated) {
+      if (status == 'authenticated') {
         final isAuthRoute =
             state.matchedLocation == '/login' ||
             state.matchedLocation == '/create-profile' ||
