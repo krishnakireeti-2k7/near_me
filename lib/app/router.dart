@@ -1,5 +1,4 @@
 // file: lib/app/router.dart
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -13,12 +12,12 @@ import 'package:near_me/features/profile/presentation/view_profile_screen.dart';
 import 'package:near_me/features/profile/presentation/edit_profile_screen.dart';
 import 'package:near_me/features/map/presentation/loading_screen.dart';
 import 'package:near_me/features/profile/presentation/friends_list_screen.dart';
+import 'package:near_me/features/chat/chat_screen.dart';
 import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
-// ✅ NEW: This provider checks both auth state and profile existence from Firestore
 final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
   final authAsync = ref.watch(authStateProvider);
   if (authAsync.isLoading) {
@@ -32,7 +31,6 @@ final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
     return;
   }
 
-  // ✅ NEW: Check for an existing user profile in Firestore
   final profileExists = await ref
       .read(profileRepositoryProvider)
       .profileExists(user.uid);
@@ -53,12 +51,6 @@ class BootstrapperChangeNotifier extends ChangeNotifier {
         notifyListeners();
       }
     });
-    // ✅ REMOVED: No longer needed as we are checking the database directly
-    // ref.listen<bool>(profileCreationStatusProvider, (previous, next) {
-    //   if (previous != next) {
-    //     notifyListeners();
-    //   }
-    // });
   }
 
   final Ref ref;
@@ -83,7 +75,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         return state.matchedLocation != '/login' ? '/login' : null;
       }
 
-      // ✅ MODIFIED: Redirect based on the persistent profile check
       if (status == 'needs-profile') {
         final isCreatingProfile = state.matchedLocation == '/create-profile';
         return !isCreatingProfile ? '/create-profile' : null;
@@ -163,6 +154,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/friends-list',
         builder: (context, state) => const FriendsListScreen(),
+      ),
+      GoRoute(
+        path: '/chat/:otherUserId',
+        name: 'chat',
+        builder: (context, state) {
+          final otherUserId = state.pathParameters['otherUserId']!;
+          final otherUserName = state.uri.queryParameters['name'] ?? 'Friend';
+          return ChatScreen(
+            otherUserId: otherUserId,
+            otherUserName: otherUserName,
+          );
+        },
       ),
     ],
   );
