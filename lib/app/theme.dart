@@ -1,12 +1,14 @@
+// file: lib/app/theme.dart
+
 import 'package:flutter/material.dart';
 
 final lightTheme = ThemeData(
   brightness: Brightness.light,
   colorScheme: const ColorScheme.light(
-    // ✅ Updated primary and secondary colors to match the chat UI.
-    primary: Color(0xFF42A5F5), // A vibrant, light blue for a fresh look
+    // ✅ New color palette: Dark charcoal for a sophisticated, modern look
+    primary: Color(0xFF333333), // Dark charcoal
     onPrimary: Colors.white,
-    secondary: Color(0xFF64B5F6), // A slightly lighter blue
+    secondary: Color(0xFF555555), // A slightly lighter gray
     onSecondary: Colors.white,
     surface: Color(0xFFF5F5F5), // Light gray background
     background: Color(0xFFFFFFFF), // White
