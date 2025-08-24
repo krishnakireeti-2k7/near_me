@@ -1,15 +1,16 @@
+// file: index.ts
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import * as pubsub from 'firebase-functions/v1/pubsub';
 import { firestore, https } from 'firebase-functions/v2';
 import { setGlobalOptions } from 'firebase-functions/v2/options';
+import { onSchedule } from 'firebase-functions/v2/scheduler'; // ✅ CORRECT IMPORT
 
 setGlobalOptions({ region: 'us-central1' });
 
 admin.initializeApp();
 const db = admin.firestore();
 
-// v2 Firestore Trigger for Interests (unchanged)
+// Firestore Trigger for Interests
 export const sendInterestNotification = firestore.onDocumentCreated(
   'interests/{interestId}',
   async (event) => {
@@ -62,45 +63,11 @@ export const sendInterestNotification = firestore.onDocumentCreated(
   }
 );
 
-// Scheduled Function: Delete interests older than 30 days and reset totalInterestsCount (unchanged)
-export const cleanupOldInterests = pubsub.schedule('every 24 hours').onRun(
-  async (context) => {
-    functions.logger.info('Running cleanupOldInterests job...');
-    const thirtyDaysAgo = admin.firestore.Timestamp.fromDate(
-      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    );
-
-    const oldInterestsSnapshot = await db
-      .collection('interests')
-      .where('timestamp', '<', thirtyDaysAgo)
-      .get();
-
-    if (oldInterestsSnapshot.empty) {
-      functions.logger.info('No old interests to delete.');
-    } else {
-      const batch = db.batch();
-      oldInterestsSnapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
-      await batch.commit();
-      functions.logger.info(`Deleted ${oldInterestsSnapshot.docs.length} old interests.`);
-    }
-
-    const usersSnapshot = await db.collection('users').get();
-    const batch = db.batch();
-    usersSnapshot.docs.forEach((doc) => {
-      batch.update(doc.ref, { totalInterestsCount: 0 });
-    });
-    await batch.commit();
-    functions.logger.info(`Reset totalInterestsCount for ${usersSnapshot.docs.length} users.`);
-  }
-);
-
-// v2 Firestore Trigger for Friend Requests
+// Firestore Trigger for Friend Requests
 export const sendFriendRequestNotification = firestore.onDocumentCreated(
   'friendships/{requestId}',
   async (event) => {
-    functions.logger.info('sendFriendRequestNotification triggered', { 
+    functions.logger.info('sendFriendRequestNotification triggered', {
       requestId: event.params.requestId,
       documentData: event.data?.data()
     });
@@ -154,36 +121,68 @@ export const sendFriendRequestNotification = firestore.onDocumentCreated(
   }
 );
 
-// Scheduled Function: Delete friend requests older than 30 days
-export const cleanupOldFriendRequests = pubsub.schedule('every 24 hours').onRun(
-  async (context) => {
-    functions.logger.info('Running cleanupOldFriendRequests job...');
-    const thirtyDaysAgo = admin.firestore.Timestamp.fromDate(
-      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    );
+// Scheduled Function: Delete chat batches older than 12 hours
+// ✅ Uses onSchedule from the correct module
+export const cleanupOldChatBatches = onSchedule('every 12 hours', async () => {
+  functions.logger.info('Running cleanupOldChatBatches job...');
+  const twelveHoursAgo = admin.firestore.Timestamp.fromDate(
+    new Date(Date.now() - 12 * 60 * 60 * 1000)
+  );
 
-    const oldFriendRequestsSnapshot = await db
-      .collection('friendships')
-      .where('status', '==', 'pending')
-      .where('timestamp', '<', thirtyDaysAgo)
-      .get();
+  const oldBatchesSnapshot = await db
+    .collection('chat_batches')
+    .where('startTimestamp', '<', twelveHoursAgo)
+    .get();
 
-    if (oldFriendRequestsSnapshot.empty) {
-      functions.logger.info('No old friend requests to delete.');
-    } else {
-      const batch = db.batch();
-      oldFriendRequestsSnapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
-        const receiverId = doc.data().user1Id === doc.data().senderId ? doc.data().user2Id : doc.data().user1Id;
-        batch.update(db.collection('users').doc(receiverId), {
-          totalFriendRequestsCount: admin.firestore.FieldValue.increment(-1),
-        });
-      });
-      await batch.commit();
-      functions.logger.info(`Deleted ${oldFriendRequestsSnapshot.docs.length} old friend requests and decremented totalFriendRequestsCount.`);
-    }
+  if (oldBatchesSnapshot.empty) {
+    functions.logger.info('No old chat batches to delete.');
+    return;
   }
-);
+
+  const batch = db.batch();
+  for (const batchDoc of oldBatchesSnapshot.docs) {
+    const messagesSnapshot = await db
+      .collection('chat_batches')
+      .doc(batchDoc.id)
+      .collection('messages')
+      .get();
+    messagesSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    batch.delete(batchDoc.ref);
+  }
+  await batch.commit();
+  functions.logger.info(`Deleted ${oldBatchesSnapshot.docs.length} old chat batches and their messages.`);
+});
+
+
+// Scheduled Function: Delete friend requests older than 30 days
+// ✅ Uses onSchedule from the correct module
+export const cleanupOldFriendRequests = onSchedule('every 24 hours', async () => {
+  functions.logger.info('Running cleanupOldFriendRequests job...');
+  const thirtyDaysAgo = admin.firestore.Timestamp.fromDate(
+    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  );
+
+  const oldFriendRequestsSnapshot = await db
+    .collection('friendships')
+    .where('status', '==', 'pending')
+    .where('timestamp', '<', thirtyDaysAgo)
+    .get();
+
+  if (oldFriendRequestsSnapshot.empty) {
+    functions.logger.info('No old friend requests to delete.');
+  } else {
+    const batch = db.batch();
+    oldFriendRequestsSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      const receiverId = doc.data().user1Id === doc.data().senderId ? doc.data().user2Id : doc.data().user1Id;
+      batch.update(db.collection('users').doc(receiverId), {
+        totalFriendRequestsCount: admin.firestore.FieldValue.increment(-1),
+      });
+    });
+    await batch.commit();
+    functions.logger.info(`Deleted ${oldFriendRequestsSnapshot.docs.length} old friend requests and decremented totalFriendRequestsCount.`);
+  }
+});
 
 // HTTPS Cloud Function for sending notifications
 export const sendNotification = https.onRequest(async (req, res) => {

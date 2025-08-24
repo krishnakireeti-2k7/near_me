@@ -1,3 +1,4 @@
+// file: lib/features/chat/chat_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatMessage {

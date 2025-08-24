@@ -1,3 +1,4 @@
+// file: lib/features/chat/repository/chat_repository_provider.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
