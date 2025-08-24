@@ -1,3 +1,5 @@
+// file: lib/features/profile/presentation/widgets/friend_profile_tile.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,20 +37,27 @@ class FriendProfileTile extends ConsumerWidget {
           ),
           title: Text(userProfile.name ?? 'Friend'),
           subtitle: Text(userProfile.shortBio ?? 'No bio available'),
-          trailing: IconButton(
-            icon: const Icon(Icons.chat_bubble_outline),
-            color: colorScheme.primary,
-            onPressed: () {
-              context.pushNamed(
-                'chat',
-                pathParameters: {'otherUserId': friendUid},
-                queryParameters: {'name': userProfile.name ?? 'Friend'},
-              );
-              debugPrint('Chat button pressed for ${userProfile.name}');
-            },
-          ),
+          // ✅ REMOVED: No more trailing chat button
+          // trailing: IconButton(
+          //   icon: const Icon(Icons.chat_bubble_outline),
+          //   color: colorScheme.primary,
+          //   onPressed: () {
+          //     context.pushNamed(
+          //       'chat',
+          //       pathParameters: {'otherUserId': friendUid},
+          //       queryParameters: {'name': userProfile.name ?? 'Friend'},
+          //     );
+          //     debugPrint('Chat button pressed for ${userProfile.name}');
+          //   },
+          // ),
           onTap: () {
-            context.push('/profile/$friendUid');
+            // ✅ UPDATED: The entire tile now opens the chat
+            context.pushNamed(
+              'chat',
+              pathParameters: {'otherUserId': friendUid},
+              queryParameters: {'name': userProfile.name ?? 'Friend'},
+            );
+            debugPrint('Chat opened for ${userProfile.name} via tile tap');
           },
         );
       },

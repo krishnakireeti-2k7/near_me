@@ -57,5 +57,3 @@ class FriendsListScreen extends ConsumerWidget {
     );
   }
 }
-
-
