@@ -1,5 +1,3 @@
-// file: lib/features/profile/presentation/widgets/friend_profile_tile.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,12 +39,15 @@ class FriendProfileTile extends ConsumerWidget {
             icon: const Icon(Icons.chat_bubble_outline),
             color: colorScheme.primary,
             onPressed: () {
-              // TODO: This will be the navigation to the chat screen
+              context.pushNamed(
+                'chat',
+                pathParameters: {'otherUserId': friendUid},
+                queryParameters: {'name': userProfile.name ?? 'Friend'},
+              );
               debugPrint('Chat button pressed for ${userProfile.name}');
             },
           ),
           onTap: () {
-            // Navigate to the user's profile when the tile is tapped
             context.push('/profile/$friendUid');
           },
         );
