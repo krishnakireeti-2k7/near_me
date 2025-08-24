@@ -56,46 +56,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     super.dispose();
   }
 
-  void _showVanishingMessage(BuildContext context) {
+  void _showVanishingMessage(
+    BuildContext context,
+    Duration remainingTime,
+    GlobalKey key,
+  ) {
     final overlay = Overlay.of(context);
+
+    final renderBox = key.currentContext!.findRenderObject() as RenderBox;
+    final position = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    const messageWidth = 220.0; // approximate popup width
+    final leftPosition =
+        (position.dx + messageWidth > screenWidth)
+            ? screenWidth -
+                messageWidth -
+                16 // keep 16px padding from edge
+            : position.dx;
+
     final overlayEntry = OverlayEntry(
       builder:
           (context) => Positioned(
-            top:
-                MediaQuery.of(context).padding.top +
-                AppBar().preferredSize.height +
-                10,
-            left: 20,
-            right: 20,
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Text(
-                    'This chat will vanish after 12 hours.',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+            left: leftPosition,
+            top: position.dy + size.height + 4, // show just below the timer
+            child: SizedBox(
+              width: messageWidth,
+              child: _FadeMessage(
+                message:
+                    "⏳ Chat will vanish in ${_formatDuration(remainingTime)}",
               ),
             ),
           ),
@@ -104,10 +94,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     overlay.insert(overlayEntry);
 
     Future.delayed(const Duration(seconds: 3), () {
-      if (overlayEntry.mounted) {
-        overlayEntry.remove();
-      }
+      if (overlayEntry.mounted) overlayEntry.remove();
     });
+  }
+
+
+  String _formatDuration(Duration duration) {
+    if (duration.inHours > 0) {
+      return "${duration.inHours}h ${duration.inMinutes % 60}m";
+    } else if (duration.inMinutes > 0) {
+      return "${duration.inMinutes}m ${duration.inSeconds % 60}s";
+    } else {
+      return "${duration.inSeconds}s";
+    }
   }
 
   @override
@@ -120,13 +119,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final batchStartTime = ref.watch(
       chatBatchStartTimeProvider(widget.otherUserId),
     );
-    final colorScheme = Theme.of(context).colorScheme; // ✅ Get color scheme
+    final colorScheme = Theme.of(context).colorScheme;
 
     if (currentUser == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // ✅ Use theme colors for the background gradient
     final gradient = LinearGradient(
       colors: [colorScheme.surface, colorScheme.background],
       begin: Alignment.topCenter,
@@ -183,13 +181,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 8.0,
                                       ),
-                                      child: GestureDetector(
-                                        onTap:
-                                            () =>
-                                                _showVanishingMessage(context),
-                                        child: CountdownTimer(
-                                          startTime: startTime,
-                                        ),
+                                      child: CountdownTimer(
+                                        key:
+                                            GlobalKey(), // 🔑 give each timer a key
+                                        startTime: startTime,
+                                        onTap: (remainingTime, key) {
+                                          _showVanishingMessage(
+                                            context,
+                                            remainingTime,
+                                            key,
+                                          );
+                                        },
                                       ),
                                     )
                                     : const SizedBox(),
@@ -263,13 +265,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
     return Container(
       padding: const EdgeInsets.all(12),
-      color: colorScheme.background.withOpacity(0.8), // ✅ Use theme color
+      color: colorScheme.background.withOpacity(0.8),
       child: Row(
         children: [
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: colorScheme.surface, // ✅ Use theme color
+                color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
@@ -285,7 +287,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   hintText: 'Type a message...',
                   hintStyle: textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurface.withOpacity(0.6),
-                  ), // ✅ Use theme style
+                  ),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 20,
@@ -294,18 +296,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                 ),
                 style: textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurface,
-                ), // ✅ Use theme style
+                ),
               ),
             ),
           ),
           const SizedBox(width: 8),
           CircleAvatar(
-            backgroundColor: Colors.blueGrey, // ✅ Use theme color
+            backgroundColor: Colors.blueGrey,
             child: IconButton(
-              icon: Icon(
-                Icons.send,
-                color: colorScheme.onPrimary,
-              ), 
+              icon: Icon(Icons.send, color: colorScheme.onPrimary),
               onPressed: _sendMessage,
             ),
           ),
@@ -337,8 +336,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
 class CountdownTimer extends StatefulWidget {
   final Timestamp startTime;
+  final void Function(Duration remainingTime, GlobalKey key)? onTap;
 
-  const CountdownTimer({super.key, required this.startTime});
+  const CountdownTimer({super.key, required this.startTime, this.onTap});
 
   @override
   State<CountdownTimer> createState() => _CountdownTimerState();
@@ -376,30 +376,99 @@ class _CountdownTimerState extends State<CountdownTimer> {
 
     Color timerColor = colorScheme.onSurface;
     if (remainingTime.inHours < 1) {
-      timerColor = Colors.red;
+      timerColor = Colors.red.shade400; // Softer red
     } else if (remainingTime.inHours < 3) {
-      timerColor = Colors.orange;
+      timerColor = Colors.orange.shade400; // Softer orange
+    } else if (remainingTime.inHours < 6) {
+      timerColor = Colors.amber.shade400; // Warm amber
+    } else {
+      timerColor = Colors.green.shade400; // Calming green
     }
 
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      color: colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.access_time, color: timerColor, size: 16),
-            const SizedBox(width: 6),
-            Text(
-              '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: timerColor,
+    return GestureDetector(
+      onTap: () => widget.onTap?.call(remainingTime, widget.key as GlobalKey),
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        color: colorScheme.surface,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.access_time, color: timerColor, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                '${hours.toString().padLeft(2, '0')}:'
+                '${minutes.toString().padLeft(2, '0')}:'
+                '${seconds.toString().padLeft(2, '0')}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: timerColor,
+                ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FadeMessage extends StatefulWidget {
+  final String message;
+  const _FadeMessage({required this.message});
+
+  @override
+  State<_FadeMessage> createState() => _FadeMessageState();
+}
+
+class _FadeMessageState extends State<_FadeMessage>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+    _controller.forward();
+
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) _controller.reverse();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black87,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            widget.message,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
-          ],
+          ),
         ),
       ),
     );
