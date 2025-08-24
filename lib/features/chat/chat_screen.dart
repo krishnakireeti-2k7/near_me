@@ -3,14 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:go_router/go_router.dart'; // ✅ NEW IMPORT
+import 'package:go_router/go_router.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/chat/repository/chat_repository_provider.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/chat/widgets/chat_message_bubble.dart';
 
-// ✅ NEW: Provider to fetch the other user's profile
 final otherUserProfileStreamProvider =
     StreamProvider.family<UserProfileModel, String>((ref, userId) {
       return ref.read(profileRepositoryProvider).streamUserProfile(userId);
@@ -57,7 +56,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     super.dispose();
   }
 
-  // ✅ New method to show the temporary message
   void _showVanishingMessage(BuildContext context) {
     final overlay = Overlay.of(context);
     final overlayEntry = OverlayEntry(
@@ -122,20 +120,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final batchStartTime = ref.watch(
       chatBatchStartTimeProvider(widget.otherUserId),
     );
+    final colorScheme = Theme.of(context).colorScheme; // ✅ Get color scheme
 
     if (currentUser == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    const gradient = LinearGradient(
-      colors: [Color(0xFFF5F5F5), Color(0xFFFFFFFF)],
+    // ✅ Use theme colors for the background gradient
+    final gradient = LinearGradient(
+      colors: [colorScheme.surface, colorScheme.background],
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
     );
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: gradient),
+        decoration: BoxDecoration(gradient: gradient),
         child: Column(
           children: [
             otherUserProfile.when(
@@ -145,13 +145,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                     backgroundColor: Colors.transparent,
                     titleSpacing: 0,
                     leading: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                      icon: Icon(
+                        Icons.arrow_back,
+                        color: colorScheme.onSurface,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                     title: GestureDetector(
-                      // ✅ WRAPPING WITH GESTURE DETECTOR
                       onTap: () {
-                        // Navigate to the other user's profile screen using go_router
                         context.push('/profile/${profile.uid}');
                       },
                       child: Row(
@@ -165,8 +166,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                           const SizedBox(width: 12),
                           Text(
                             profile.name,
-                            style: const TextStyle(
-                              color: Colors.black87,
+                            style: TextStyle(
+                              color: colorScheme.onSurface,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -257,15 +258,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   }
 
   Widget _buildMessageInput() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Container(
       padding: const EdgeInsets.all(12),
-      color: Colors.white.withOpacity(0.8),
+      color: colorScheme.background.withOpacity(0.8), // ✅ Use theme color
       child: Row(
         children: [
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface, // ✅ Use theme color
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
@@ -279,21 +283,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                 controller: _messageController,
                 decoration: InputDecoration(
                   hintText: 'Type a message...',
+                  hintStyle: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface.withOpacity(0.6),
+                  ), // ✅ Use theme style
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 12,
                   ),
                 ),
-                style: const TextStyle(color: Colors.black87),
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurface,
+                ), // ✅ Use theme style
               ),
             ),
           ),
           const SizedBox(width: 8),
           CircleAvatar(
-            backgroundColor: const Color(0xFF616161),
+            backgroundColor: Colors.blueGrey, // ✅ Use theme color
             child: IconButton(
-              icon: const Icon(Icons.send, color: Colors.white),
+              icon: Icon(
+                Icons.send,
+                color: colorScheme.onPrimary,
+              ), 
               onPressed: _sendMessage,
             ),
           ),
@@ -360,9 +372,9 @@ class _CountdownTimerState extends State<CountdownTimer> {
     final hours = remainingTime.inHours;
     final minutes = remainingTime.inMinutes % 60;
     final seconds = remainingTime.inSeconds % 60;
+    final colorScheme = Theme.of(context).colorScheme;
 
-    // Determine the color based on remaining time
-    Color timerColor = Theme.of(context).colorScheme.onSurface;
+    Color timerColor = colorScheme.onSurface;
     if (remainingTime.inHours < 1) {
       timerColor = Colors.red;
     } else if (remainingTime.inHours < 3) {
@@ -372,7 +384,7 @@ class _CountdownTimerState extends State<CountdownTimer> {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      color: Theme.of(context).colorScheme.surface,
+      color: colorScheme.surface,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
