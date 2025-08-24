@@ -6,10 +6,8 @@ import 'package:near_me/features/profile/repository/profile_repository_provider.
 import 'package:go_router/go_router.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/friendship_repository_provider.dart';
-// ✅ NEW IMPORT: Import the new widget file
 import 'package:near_me/features/profile/presentation/widgets/friend_profile_tile.dart';
 
-// 1️⃣ Provider to fetch the list of friend UIDs for the current user
 final friendsListProvider = StreamProvider<List<String>>((ref) {
   final currentUserProfileAsyncValue = ref.watch(
     currentUserProfileStreamProvider,
@@ -32,27 +30,60 @@ class FriendsListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final friendsListAsyncValue = ref.watch(friendsListProvider);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Friends')),
-      body: friendsListAsyncValue.when(
-        data: (friendUids) {
-          if (friendUids.isEmpty) {
-            return const Center(
-              child: Text("You don't have any friends yet. Add some!"),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: colorScheme.surface,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'My Friends',
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [colorScheme.surface, colorScheme.background],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: friendsListAsyncValue.when(
+          data: (friendUids) {
+            if (friendUids.isEmpty) {
+              return Center(
+                child: Text(
+                  "You don't have any friends yet. Add some!",
+                  style: TextStyle(color: colorScheme.onSurface, fontSize: 16),
+                ),
+              );
+            }
+            return ListView.builder(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
+              itemCount: friendUids.length,
+              itemBuilder: (context, index) {
+                final friendUid = friendUids[index];
+                return FriendProfileTile(friendUid: friendUid);
+              },
             );
-          }
-
-          return ListView.builder(
-            itemCount: friendUids.length,
-            itemBuilder: (context, index) {
-              final friendUid = friendUids[index];
-              return FriendProfileTile(friendUid: friendUid);
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Center(child: Text('Error: $e')),
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error:
+              (e, st) => Center(
+                child: Text(
+                  'Error: $e',
+                  style: TextStyle(color: colorScheme.error),
+                ),
+              ),
+        ),
       ),
     );
   }
