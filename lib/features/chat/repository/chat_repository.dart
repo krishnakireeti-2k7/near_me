@@ -27,40 +27,32 @@ class ChatRepository {
     return snapshot?.status == FriendshipStatus.accepted;
   }
 
+  // ✅ CORRECTED METHOD
   Future<String?> _getOrCreateChatBatchId(
     String user1Id,
     String user2Id,
   ) async {
     final userIds = [user1Id, user2Id]..sort();
     final chatBatchId = userIds.join('_');
-    final now = Timestamp.now();
-    final twelveHoursAgo = Timestamp.fromDate(
-      DateTime.now().subtract(const Duration(hours: 12)),
-    );
+    final chatBatchRef = _firestore.collection('chat_batches').doc(chatBatchId);
 
-    final batchQuery =
-        await _firestore
-            .collection('chat_batches')
-            .where('id', isEqualTo: chatBatchId)
-            .where('startTimestamp', isGreaterThan: twelveHoursAgo)
-            .limit(1)
-            .get();
+    // Use a direct get() call to check for document existence
+    final chatBatchDoc = await chatBatchRef.get();
 
-    if (batchQuery.docs.isNotEmpty) {
-      return batchQuery.docs.first.id;
+    if (chatBatchDoc.exists) {
+      debugPrint('ChatRepository: Found existing chat batch: $chatBatchId');
+      return chatBatchId;
     }
 
+    // If the document does not exist, create it
     final newBatch = ChatBatch(
       id: chatBatchId,
       user1Id: userIds[0],
       user2Id: userIds[1],
-      startTimestamp: now,
+      startTimestamp: Timestamp.now(),
     );
 
-    await _firestore
-        .collection('chat_batches')
-        .doc(chatBatchId)
-        .set(newBatch.toMap());
+    await chatBatchRef.set(newBatch.toMap());
     debugPrint('ChatRepository: Created new chat batch: $chatBatchId');
     return chatBatchId;
   }
