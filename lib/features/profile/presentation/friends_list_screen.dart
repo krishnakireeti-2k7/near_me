@@ -3,9 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
-import 'package:go_router/go_router.dart';
-import 'package:near_me/features/profile/model/user_profile_model.dart';
-import 'package:near_me/features/profile/repository/friendship_repository_provider.dart';
 import 'package:near_me/features/profile/presentation/widgets/friend_profile_tile.dart';
 
 final friendsListProvider = StreamProvider<List<String>>((ref) {
@@ -14,8 +11,8 @@ final friendsListProvider = StreamProvider<List<String>>((ref) {
   );
   return currentUserProfileAsyncValue.when(
     data: (userProfile) {
-      if (userProfile != null && userProfile.friends != null) {
-        return Stream.value(userProfile.friends!);
+      if (userProfile != null) {
+        return Stream.value(userProfile.friends);
       }
       return Stream.value([]);
     },
@@ -63,12 +60,14 @@ class FriendsListScreen extends ConsumerWidget {
                 ),
               );
             }
-            return ListView.builder(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 8.0,
-              ),
+
+            // ✅ Directory mode only
+            return ListView.separated(
+              padding: const EdgeInsets.all(12),
               itemCount: friendUids.length,
+              separatorBuilder:
+                  (_, __) =>
+                      Divider(height: 1, color: colorScheme.outlineVariant),
               itemBuilder: (context, index) {
                 final friendUid = friendUids[index];
                 return FriendProfileTile(friendUid: friendUid);

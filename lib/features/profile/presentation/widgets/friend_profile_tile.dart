@@ -19,8 +19,23 @@ class FriendProfileTile extends ConsumerWidget {
       data: (userProfile) {
         if (userProfile == null) return const SizedBox.shrink();
 
+        final avatar = CircleAvatar(
+          radius: 30,
+          backgroundImage:
+              userProfile.profileImageUrl != null &&
+                      userProfile.profileImageUrl!.isNotEmpty
+                  ? NetworkImage(userProfile.profileImageUrl!)
+                  : null,
+          backgroundColor: colorScheme.surfaceVariant,
+          child:
+              (userProfile.profileImageUrl == null ||
+                      userProfile.profileImageUrl!.isEmpty)
+                  ? Icon(Icons.person, color: colorScheme.onSurface, size: 26)
+                  : null,
+        );
+
+        // ✅ Directory style (ID card style)
         return InkWell(
-          // ✅ Use InkWell for a clean tap effect
           onTap: () {
             context.pushNamed(
               'chat',
@@ -28,72 +43,48 @@ class FriendProfileTile extends ConsumerWidget {
               queryParameters: {'name': userProfile.name ?? 'Friend'},
             );
           },
-          borderRadius: BorderRadius.circular(16),
-          child: Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(
-                16,
-              ), // ✅ Increased border radius for a softer look
-            ),
-            margin: const EdgeInsets.symmetric(
-              vertical: 8,
-            ), // ✅ Adjusted vertical margin
-            child: Padding(
-              padding: const EdgeInsets.all(16.0), // ✅ Generous padding
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 30, // ✅ Larger avatar
-                    backgroundImage:
-                        userProfile.profileImageUrl != null &&
-                                userProfile.profileImageUrl!.isNotEmpty
-                            ? NetworkImage(userProfile.profileImageUrl!)
-                            : null,
-                    backgroundColor: colorScheme.surfaceVariant,
-                    child:
-                        userProfile.profileImageUrl == null ||
-                                userProfile.profileImageUrl!.isEmpty
-                            ? Icon(
-                              Icons.person,
-                              color: colorScheme.onSurface,
-                              size: 30,
-                            )
-                            : null,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          userProfile.name ?? 'Friend',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: colorScheme.onSurface,
-                          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4),
+            child: Row(
+              children: [
+                avatar,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        userProfile.name ?? 'Friend',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: colorScheme.onSurface,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          userProfile.shortBio ?? 'No bio available',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: colorScheme.onSurface.withOpacity(0.7),
-                          ),
-                          maxLines: 2, // ✅ Allow for a slightly longer bio
-                          overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        userProfile.shortBio ?? 'No bio available',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colorScheme.onSurface.withOpacity(0.7),
                         ),
-                      ],
-                    ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                Icon(Icons.chevron_right, color: colorScheme.onSurface),
+              ],
             ),
           ),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading:
+          () => const SizedBox(
+            height: 60,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
       error: (e, st) => const Center(child: Text('Error loading user')),
     );
   }
