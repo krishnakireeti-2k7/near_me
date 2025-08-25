@@ -34,6 +34,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   final TextEditingController _messageController = TextEditingController();
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  bool _isChatVanished = false; // ✅ NEW: State to manage vanishing animation
 
   @override
   void initState() {
@@ -68,19 +69,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final size = renderBox.size;
 
     final screenWidth = MediaQuery.of(context).size.width;
-    const messageWidth = 220.0; // approximate popup width
+    const messageWidth = 220.0;
     final leftPosition =
         (position.dx + messageWidth > screenWidth)
-            ? screenWidth -
-                messageWidth -
-                16 // keep 16px padding from edge
+            ? screenWidth - messageWidth - 16
             : position.dx;
 
     final overlayEntry = OverlayEntry(
       builder:
           (context) => Positioned(
             left: leftPosition,
-            top: position.dy + size.height + 4, // show just below the timer
+            top: position.dy + size.height + 4,
             child: SizedBox(
               width: messageWidth,
               child: _FadeMessage(
@@ -97,7 +96,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       if (overlayEntry.mounted) overlayEntry.remove();
     });
   }
-
 
   String _formatDuration(Duration duration) {
     if (duration.inHours > 0) {
@@ -130,6 +128,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
     );
+
+    // ✅ Listen for the chat vanishing event from the provider
+    messages.whenData((messageList) {
+      if (messageList.isEmpty && !_isChatVanished) {
+        setState(() {
+          _isChatVanished = true;
+        });
+      } else if (messageList.isNotEmpty && _isChatVanished) {
+        setState(() {
+          _isChatVanished = false;
+        });
+      }
+    });
 
     return Scaffold(
       body: Container(
@@ -182,8 +193,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                                         horizontal: 8.0,
                                       ),
                                       child: CountdownTimer(
-                                        key:
-                                            GlobalKey(), // 🔑 give each timer a key
+                                        key: GlobalKey(),
                                         startTime: startTime,
                                         onTap: (remainingTime, key) {
                                           _showVanishingMessage(
@@ -214,25 +224,49 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   ),
             ),
             Expanded(
-              child: FadeTransition(
-                opacity: _fadeAnimation,
+              child: AnimatedOpacity(
+                // ✅ WRAPPED IN ANIMATEDOPACITY
+                opacity: _isChatVanished ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 500),
                 child: messages.when(
-                  data:
-                      (messageList) => ListView.builder(
-                        reverse: true,
-                        padding: const EdgeInsets.all(16.0),
-                        itemCount: messageList.length,
-                        itemBuilder: (context, index) {
-                          final message = messageList[index];
-                          final isCurrentUser =
-                              message.senderId == currentUser.uid;
-                          return ChatMessageBubble(
-                            message: message.content,
-                            isCurrentUser: isCurrentUser,
-                            timestamp: _formatTimestamp(message.timestamp),
-                          );
-                        },
-                      ),
+                  data: (messageList) {
+                    if (messageList.isEmpty && _isChatVanished) {
+                      return Center(
+                        child: Text(
+                          "This chat has vanished.",
+                          style: TextStyle(
+                            color: colorScheme.onSurface.withOpacity(0.5),
+                            fontSize: 16,
+                          ),
+                        ),
+                      );
+                    } else if (messageList.isEmpty && !_isChatVanished) {
+                      return Center(
+                        child: Text(
+                          "No messages yet.",
+                          style: TextStyle(
+                            color: colorScheme.onSurface.withOpacity(0.5),
+                            fontSize: 16,
+                          ),
+                        ),
+                      );
+                    }
+                    return ListView.builder(
+                      reverse: true,
+                      padding: const EdgeInsets.all(16.0),
+                      itemCount: messageList.length,
+                      itemBuilder: (context, index) {
+                        final message = messageList[index];
+                        final isCurrentUser =
+                            message.senderId == currentUser.uid;
+                        return ChatMessageBubble(
+                          message: message.content,
+                          isCurrentUser: isCurrentUser,
+                          timestamp: _formatTimestamp(message.timestamp),
+                        );
+                      },
+                    );
+                  },
                   loading:
                       () => const Center(child: CircularProgressIndicator()),
                   error:
@@ -374,15 +408,16 @@ class _CountdownTimerState extends State<CountdownTimer> {
     final seconds = remainingTime.inSeconds % 60;
     final colorScheme = Theme.of(context).colorScheme;
 
+    // ✅ UPDATED: Softer, integrated colors for the timer
     Color timerColor = colorScheme.onSurface;
     if (remainingTime.inHours < 1) {
-      timerColor = Colors.red.shade400; // Softer red
+      timerColor = Colors.red.shade400;
     } else if (remainingTime.inHours < 3) {
-      timerColor = Colors.orange.shade400; // Softer orange
+      timerColor = Colors.orange.shade400;
     } else if (remainingTime.inHours < 6) {
-      timerColor = Colors.amber.shade400; // Warm amber
+      timerColor = Colors.amber.shade400;
     } else {
-      timerColor = Colors.green.shade400; // Calming green
+      timerColor = Colors.green.shade400;
     }
 
     return GestureDetector(
