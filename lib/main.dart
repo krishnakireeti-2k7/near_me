@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:near_me/app/router.dart';
+import 'package:near_me/app/theme.dart'; // ✅ NEW: Import your theme file
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
@@ -35,6 +36,7 @@ class MyApp extends ConsumerWidget {
       title: 'NearMe',
       debugShowCheckedModeBanner: false,
       routerConfig: ref.watch(routerProvider),
+      theme: lightTheme, // ✅ ADD THIS LINE to apply the theme
       builder:
           (context, child) => FriendRequestNotificationHandler(
             child: InterestNotificationHandler(child: child!),
