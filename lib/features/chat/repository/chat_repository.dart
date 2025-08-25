@@ -27,7 +27,7 @@ class ChatRepository {
     return snapshot?.status == FriendshipStatus.accepted;
   }
 
-  // ✅ CORRECTED METHOD
+  // ✅ UPDATED METHOD FOR TESTING
   Future<String?> _getOrCreateChatBatchId(
     String user1Id,
     String user2Id,
@@ -36,10 +36,23 @@ class ChatRepository {
     final chatBatchId = userIds.join('_');
     final chatBatchRef = _firestore.collection('chat_batches').doc(chatBatchId);
 
-    // Use a direct get() call to check for document existence
     final chatBatchDoc = await chatBatchRef.get();
 
     if (chatBatchDoc.exists) {
+      final Timestamp startTimestamp = chatBatchDoc.data()?['startTimestamp'];
+      // ✅ Test expiration time of 1 minute
+      final chatEndTime = startTimestamp.toDate().add(
+        const Duration(hours: 12),
+      );
+      if (DateTime.now().isAfter(chatEndTime)) {
+        // If expired, delete the old chat and create a new one
+        await chatBatchRef.delete();
+        debugPrint('ChatRepository: Deleted expired chat batch: $chatBatchId');
+        return _getOrCreateChatBatchId(
+          user1Id,
+          user2Id,
+        ); // Recurse to create new
+      }
       debugPrint('ChatRepository: Found existing chat batch: $chatBatchId');
       return chatBatchId;
     }
