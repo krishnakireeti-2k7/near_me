@@ -349,7 +349,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final ui.Image image = await completer.future;
 
       // ✅ NEW: Dynamic marker size calculation based on zoom level
-      const double minSize = 35.0;
+      const double minSize = 70.0;
       const double maxSize = 120.0;
       const double minZoom = 10.0;
       const double maxZoom = 20.0;

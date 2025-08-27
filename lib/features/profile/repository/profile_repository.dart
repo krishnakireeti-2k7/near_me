@@ -15,10 +15,19 @@ class ProfileRepository {
   }) : _firestore = firestore,
        _auth = auth;
 
-  // ✅ NEW METHOD: Checks if the user's profile document exists
+  // ✅ Existing Method: Checks if the user's profile document exists (synchronous check)
   Future<bool> profileExists(String uid) async {
     final docSnapshot = await _firestore.collection('users').doc(uid).get();
     return docSnapshot.exists;
+  }
+
+  // ✅ NEW Method: Streams real-time profile existence status
+  Stream<bool> profileExistsStream(String uid) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .map((snapshot) => snapshot.exists);
   }
 
   Future<void> createOrUpdateProfile(UserProfileModel profile) async {
@@ -113,7 +122,6 @@ class ProfileRepository {
     }
   }
 
-  // Stream for all user profiles for map
   Stream<List<UserProfileModel>> getAllUserProfilesStream() {
     return _firestore.collection('users').orderBy('uid').snapshots().map((
       snapshot,

@@ -18,27 +18,31 @@ import 'package:near_me/features/profile/model/user_profile_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 
-final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
-  final authAsync = ref.watch(authStateProvider);
-  if (authAsync.isLoading) {
-    yield {'status': 'loading'};
-    return;
-  }
+final bootstrapperProvider = StreamProvider<Map<String, dynamic>>((ref) {
+  return Stream.multi((controller) async {
+    final authAsync = ref.watch(authStateProvider);
+    if (authAsync.isLoading) {
+      controller.add({'status': 'loading'});
+      return;
+    }
 
-  final user = authAsync.value;
-  if (user == null) {
-    yield {'status': 'unauthenticated'};
-    return;
-  }
+    final user = authAsync.value;
+    if (user == null) {
+      controller.add({'status': 'unauthenticated'});
+      return;
+    }
 
-  final profileExists = await ref
-      .read(profileRepositoryProvider)
-      .profileExists(user.uid);
-  if (!profileExists) {
-    yield {'status': 'needs-profile', 'user': user};
-  } else {
-    yield {'status': 'authenticated', 'user': user};
-  }
+    // Listen to profile existence changes in real-time
+    final profileRepo = ref.read(profileRepositoryProvider);
+    final profileStream = profileRepo.profileExistsStream(user.uid);
+    await for (final exists in profileStream) {
+      if (!exists) {
+        controller.add({'status': 'needs-profile', 'user': user});
+      } else {
+        controller.add({'status': 'authenticated', 'user': user});
+      }
+    }
+  });
 });
 
 class BootstrapperChangeNotifier extends ChangeNotifier {
@@ -63,7 +67,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     refreshListenable: bootstrapperNotifier,
     redirect: (context, state) {
-      final bootstrapper = ref.read(bootstrapperProvider);
+      final bootstrapper = ref.watch(bootstrapperProvider);
 
       if (bootstrapper.isLoading) {
         return '/';

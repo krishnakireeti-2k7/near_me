@@ -1,8 +1,10 @@
+// file: lib/features/profile/presentation/create_profile_screen.dart
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:near_me/app/router.dart';
 import 'package:near_me/features/auth/auth_controller.dart';
 import 'package:near_me/features/profile/repository/profile_repository_provider.dart';
 import 'package:near_me/features/profile/model/user_profile_model.dart';
@@ -10,11 +12,7 @@ import 'package:near_me/widgets/showFloatingsnackBar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-
-// Import the new LocationService
 import 'package:near_me/services/location_service.dart';
-
-// Import the new widgets
 import 'package:near_me/widgets/profile_form.dart';
 import 'package:near_me/widgets/profile_image_picker.dart';
 
@@ -28,13 +26,11 @@ class CreateProfileScreen extends ConsumerStatefulWidget {
 
 class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-
   final nameController = TextEditingController();
   final tagsController = TextEditingController();
   final instagramController = TextEditingController();
   final twitterController = TextEditingController();
   final bioController = TextEditingController();
-
   File? _profileImage;
   bool isLoading = false;
 
@@ -104,7 +100,6 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
     }
 
     final profileRepo = ref.read(profileRepositoryProvider);
-
     late String imageUrl;
 
     try {
@@ -113,11 +108,9 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
             .ref()
             .child('profile_images')
             .child('${user.uid}_profile.jpg');
-
         final metadata = SettableMetadata(contentType: 'image/jpeg');
         final uploadTask = storageRef.putFile(_profileImage!, metadata);
         final snapshot = await uploadTask.whenComplete(() {});
-
         if (snapshot.state == TaskState.success) {
           imageUrl = await storageRef.getDownloadURL();
           debugPrint('✅ Upload successful. Image URL: $imageUrl');
@@ -155,19 +148,25 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
 
       await profileRepo.createOrUpdateProfile(profile);
 
-      // ✅ NEW: Update the new state provider to signal the router.
-      ref.read(profileCreationStatusProvider.notifier).state = true;
+      // Force refresh of bootstrapperProvider to update profile existence
+      ref.invalidate(bootstrapperProvider);
 
-      setState(() => isLoading = false);
-      showFloatingSnackBar(context, "Profile created successfully!");
+      if (mounted) {
+        context.go('/map');
+        showFloatingSnackBar(context, "Profile created successfully!");
+      }
     } catch (e, stackTrace) {
       debugPrint('Error saving profile: $e');
       debugPrint('Stack Trace: $stackTrace');
       setState(() => isLoading = false);
-      showFloatingSnackBar(
-        context,
-        "Failed to save profile. Please try again.",
-      );
+      if (mounted) {
+        showFloatingSnackBar(
+          context,
+          "Failed to save profile. Please try again.",
+        );
+      }
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
