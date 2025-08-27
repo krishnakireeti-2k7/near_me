@@ -5,8 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-// REMOVED: This import is no longer needed since SearchBarWidget handles the details.
-// import 'package:flutter_google_maps_webservices/places.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:near_me/features/map/widgets/daily_friend_request_counter_widget.dart';
@@ -44,6 +42,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   CameraPosition? _cameraPosition;
 
   BitmapDescriptor? _defaultMarker;
+  double _currentZoom = 19.0; // ✅ NEW: State for current zoom level
 
   late ProviderSubscription _disposeUserProfileListener;
   late ProviderSubscription _disposeUserLocationsListener;
@@ -233,14 +232,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-  Future<void> _updateAllMarkers() async {
+  // ✅ UPDATED: Added an optional parameter for zoom
+  Future<void> _updateAllMarkers({double? withZoom}) async {
     if (_lastCurrentUserProfile == null) return;
     final Set<Marker> newMarkers = {};
     final String currentUserId = _lastCurrentUserProfile!.uid!;
 
+    // Use the provided zoom level, or the current state value
+    final double zoom = withZoom ?? _currentZoom;
+
     final currentMarker = await _createMarker(
       user: _lastCurrentUserProfile!,
       isCurrentUser: true,
+      zoomLevel: zoom, // ✅ Pass zoom level
     );
     if (currentMarker != null) {
       newMarkers.add(currentMarker);
@@ -249,7 +253,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     for (final user in _lastUserLocations) {
       if (user.uid == currentUserId) continue;
 
-      final otherMarker = await _createMarker(user: user, isCurrentUser: false);
+      final otherMarker = await _createMarker(
+        user: user,
+        isCurrentUser: false,
+        zoomLevel: zoom, // ✅ Pass zoom level
+      );
       if (otherMarker != null) {
         newMarkers.add(otherMarker);
       }
@@ -261,9 +269,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
+  // ✅ UPDATED: Added a zoomLevel parameter
   Future<Marker?> _createMarker({
     required UserProfileModel user,
     required bool isCurrentUser,
+    required double zoomLevel,
   }) async {
     if (user.location == null ||
         (user.location!.latitude == 0 && user.location!.longitude == 0)) {
@@ -281,7 +291,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         user.lastActive != null &&
         DateTime.now().difference(user.lastActive!.toDate()).inMinutes <= 5;
 
-    final markerIcon = await _getCustomMarker(imageUrlToShow, isActive);
+    final markerIcon = await _getCustomMarker(
+      imageUrlToShow,
+      isActive,
+      zoomLevel,
+    ); // ✅ Pass zoom level
 
     return Marker(
       markerId: MarkerId(user.uid!),
@@ -301,9 +315,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
+  // ✅ UPDATED: Added a zoomLevel parameter and dynamic size calculation
   Future<BitmapDescriptor> _getCustomMarker(
     String? imageUrl,
     bool isActive,
+    double zoomLevel,
   ) async {
     if (imageUrl == null || imageUrl.isEmpty) {
       debugPrint('No profile image, using default marker');
@@ -332,10 +348,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           );
       final ui.Image image = await completer.future;
 
-      const double markerSize = 120.0;
+      // ✅ NEW: Dynamic marker size calculation based on zoom level
+      const double minSize = 35.0;
+      const double maxSize = 120.0;
+      const double minZoom = 10.0;
+      const double maxZoom = 20.0;
+      final double markerSize =
+          minSize +
+          (maxSize - minSize) *
+              ((zoomLevel - minZoom) / (maxZoom - minZoom)).clamp(0.0, 1.0);
+
       const double borderSize = 6.0;
       const double onlineIndicatorSize = 30.0;
-      const double profilePicSize = markerSize - (borderSize * 2);
+      final double profilePicSize = markerSize - (borderSize * 2);
 
       final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
       final Canvas canvas = Canvas(pictureRecorder);
@@ -416,8 +441,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  // REMOVED: The unused _onPlaceSelected function.
-
   void _handlePlaceSelected(LatLng location) {
     final mapController = ref.read(googleMapControllerProvider);
     if (mapController != null) {
@@ -438,13 +461,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         );
         setState(() {
           _cameraPosition = newCameraPosition;
+          _currentZoom = newCameraPosition.zoom; // ✅ Update zoom
         });
         mapController.animateCamera(
           CameraUpdate.newCameraPosition(newCameraPosition),
         );
+        _updateAllMarkers();
       }
     } catch (e) {
       debugPrint("Error getting current location: $e");
+    }
+  }
+
+  // ✅ NEW: Callback to handle map camera movements
+  void _onCameraMove(CameraPosition position) {
+    // Only update markers if the zoom level has changed by a noticeable amount
+    if ((position.zoom - _currentZoom).abs() > 0.5) {
+      setState(() {
+        _currentZoom = position.zoom;
+      });
+      _updateAllMarkers();
     }
   }
 
@@ -503,6 +539,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 }
               },
               initialCameraPosition: _cameraPosition!,
+              onCameraMove: _onCameraMove, // ✅ NEW: Listen for zoom changes
               markers: _markers,
               myLocationEnabled: _isLocationPermissionGranted,
               myLocationButtonEnabled: false,
